@@ -16,7 +16,9 @@ local function incremental_rename(opts, preview_ns, preview_buf)
   if state.should_fetch_references then
     -- Get positions of LSP reference symbols
     local params = vim.lsp.util.make_position_params()
-    vim.lsp.buf_request(0, "textDocument/references", params, function(err, result, _, _)
+    params.context = { includeDeclaration = vim.F.if_nil(opts.include_declaration, true) }
+
+    vim.lsp.buf_request(0, "textDocument/references", params, function(err, result, ctx, _)
       if err then
         vim.notify("Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
         return
