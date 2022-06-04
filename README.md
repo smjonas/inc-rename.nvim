@@ -26,6 +26,13 @@ type the new name:
 ```lua
 vim.keymap.set("n", "<leader>r", ":IncRename ")
 ```
+If you want to prefill the word under the cursor you could do the following:
+```lua
+vim.keymap.set("n", "<leader>r", function()
+  return ":IncRename " .. vim.fn.expand("<cword>")
+end, { expr = true })
+```
+
 
 ## Customization
 You can override the default configuration by passing a Lua table to the `setup` function.

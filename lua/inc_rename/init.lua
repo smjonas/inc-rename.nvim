@@ -18,7 +18,7 @@ local function incremental_rename(opts, preview_ns, preview_buf)
     local params = vim.lsp.util.make_position_params()
     params.context = { includeDeclaration = vim.F.if_nil(opts.include_declaration, true) }
 
-    vim.lsp.buf_request(0, "textDocument/references", params, function(err, result, ctx, _)
+    vim.lsp.buf_request(0, "textDocument/references", params, function(err, result, _, _)
       if err then
         vim.notify("Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
         return
@@ -63,7 +63,7 @@ local function incremental_rename(opts, preview_ns, preview_buf)
         start_col = item.start_col + offset,
         end_col = item.start_col + #new_name + offset,
       })
-      -- Offset by the difference between the new and old names
+      -- Offset by the length difference between the new and old names
       offset = offset + #new_name - (item.end_col - item.start_col)
     end
     if preview_ns then
