@@ -1,5 +1,3 @@
-vim.keymap.set("n", "<leader>r", ":IncRename ")
-
 local M = {}
 
 M.default_config = {
