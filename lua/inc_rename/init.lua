@@ -43,6 +43,22 @@ local function fetch_references()
         state.orig_lines[line_nr] = { line_item }
       end
     end
+
+    -- Some LSP servers like bashls send items with the same positions multiple times,
+    -- filter out these duplicates to avoid highlighting issues.
+    for line_nr, line_items in pairs(state.orig_lines) do
+      local len = #line_items
+      if len > 1 then
+        local start_col, end_col = line_items[1].start_col, line_items[1].end_col
+        local filtered_lines = { line_items[1] }
+        for i = 2, len do
+          if line_items[i].start_col ~= start_col and line_items[i].end_col ~= end_col then
+            filtered_lines[i] = line_items[i]
+          end
+        end
+        state.orig_lines[line_nr] = filtered_lines
+      end
+    end
     state.should_fetch_references = false
   end)
 end
