@@ -25,11 +25,20 @@ local function fetch_references()
       vim.notify("No results from textDocument/references", vim.lsp.log_levels.WARN)
       return
     end
-    state.lsp_positions = vim.tbl_map(function(x)
-      return x.range
-    end, result)
 
     local buf = vim.api.nvim_get_current_buf()
+    local uri = vim.uri_from_bufnr(buf)
+
+    state.lsp_positions = vim.tbl_map(
+      function(item)
+        return item.range
+      end,
+      vim.tbl_filter(function(item)
+        -- Only include references from current file
+        return item.uri == uri
+      end, result)
+    )
+
     state.orig_lines = {}
     for _, position in ipairs(state.lsp_positions) do
       local line_nr = position.start.line
@@ -83,8 +92,8 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     local highlight_positions = {}
     for _, item in ipairs(line_items) do
       updated_line = updated_line:sub(1, item.start_col + offset)
-          .. new_name
-          .. updated_line:sub(item.end_col + 1 + offset)
+        .. new_name
+        .. updated_line:sub(item.end_col + 1 + offset)
       table.insert(highlight_positions, {
         start_col = item.start_col + offset,
         end_col = item.start_col + #new_name + offset,
