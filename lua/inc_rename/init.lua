@@ -130,6 +130,15 @@ end
 
 M.setup = function(user_config)
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
+  local id = vim.api.nvim_create_augroup("inc_rename.nvim", { clear = true })
+  -- We need to be able to tell when the command was aborted to refetch the references.
+  -- Otherwise the same variable would be renamed every time.
+  vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
+    group = id,
+    callback = vim.schedule_wrap(function()
+      state.should_fetch_references = true
+    end),
+  })
   create_user_command(M.config.cmd_name)
 end
 
