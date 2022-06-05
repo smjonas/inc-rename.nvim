@@ -52,6 +52,11 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   end
 
   local new_name = opts.args
+  -- Ignore whitespace-only name (abort highlighting)
+  if new_name:match("^%s*$") then
+    return
+  end
+
   for line_nr, line_items in pairs(state.orig_lines) do
     local offset = 0
     local updated_line = line_items[1].text
