@@ -11,43 +11,47 @@ local state = {
   lsp_positions = nil,
 }
 
+local function fetch_references()
+  -- Get positions of LSP reference symbols
+  local params = vim.lsp.util.make_position_params()
+  params.context = { includeDeclaration = true }
+
+  vim.lsp.buf_request(0, "textDocument/references", params, function(err, result, _, _)
+    if err then
+      vim.notify("Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
+      return
+    end
+    if not result or vim.tbl_isempty(result) then
+      vim.notify("No results from textDocument/references", vim.lsp.log_levels.WARN)
+      return
+    end
+    state.lsp_positions = vim.tbl_map(function(x)
+      return x.range
+    end, result)
+
+    local buf = vim.api.nvim_get_current_buf()
+    state.orig_lines = {}
+    for _, position in ipairs(state.lsp_positions) do
+      local line_nr = position.start.line
+      local line = vim.api.nvim_buf_get_lines(buf, line_nr, line_nr + 1, false)[1]
+      local start_col, end_col = position.start.character, position["end"].character
+      local line_item = { text = line, start_col = start_col, end_col = end_col }
+      -- Same line was already seen, this case needs to be handled separately
+      if state.orig_lines[line_nr] then
+        table.insert(state.orig_lines[line_nr], line_item)
+      else
+        state.orig_lines[line_nr] = { line_item }
+      end
+    end
+    state.should_fetch_references = false
+  end)
+end
+
 -- Called when the user is still typing the command or the command arguments
 local function incremental_rename_preview(opts, preview_ns, preview_buf)
   -- Store the lines of the buffer at the first invocation
   if state.should_fetch_references then
-    -- Get positions of LSP reference symbols
-    local params = vim.lsp.util.make_position_params()
-    params.context = { includeDeclaration = true }
-
-    vim.lsp.buf_request(0, "textDocument/references", params, function(err, result, _, _)
-      if err then
-        vim.notify("Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
-        return
-      end
-      if not result or vim.tbl_isempty(result) then
-        vim.notify("No results from textDocument/references", vim.lsp.log_levels.WARN)
-        return
-      end
-      state.lsp_positions = vim.tbl_map(function(x)
-        return x.range
-      end, result)
-
-      local buf = vim.api.nvim_get_current_buf()
-      state.orig_lines = {}
-      for _, position in ipairs(state.lsp_positions) do
-        local line_nr = position.start.line
-        local line = vim.api.nvim_buf_get_lines(buf, line_nr, line_nr + 1, false)[1]
-        local start_col, end_col = position.start.character, position["end"].character
-        local line_item = { text = line, start_col = start_col, end_col = end_col }
-        -- Same line was already seen, this case needs to be handled separately
-        if state.orig_lines[line_nr] then
-          table.insert(state.orig_lines[line_nr], line_item)
-        else
-          state.orig_lines[line_nr] = { line_item }
-        end
-      end
-      state.should_fetch_references = false
-    end)
+    fetch_references()
     return
   end
 
