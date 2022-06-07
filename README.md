@@ -24,11 +24,11 @@ Simply type `:IncRename <new_name>` while your cursor is on an LSP identifier.
 You could also create a keymap that types out the command name for you so you only have to
 type the new name:
 ```lua
-vim.keymap.set("n", "<leader>r", ":IncRename ")
+vim.keymap.set("n", "<leader>rn", ":IncRename ")
 ```
-If you want to prefill the word under the cursor you could do the following:
+If you want to prefill the word under the cursor you can do the following:
 ```lua
-vim.keymap.set("n", "<leader>r", function()
+vim.keymap.set("n", "<leader>rn", function()
   return ":IncRename " .. vim.fn.expand("<cword>")
 end, { expr = true })
 ```
@@ -40,6 +40,6 @@ The default options are:
 ```lua
 require("inc_rename.nvim").setup {
   cmd_name = "IncRename", -- the name of the command
-  hl_group = "Substitute", -- the highlight group used for highlighting the new identifier's name
+  hl_group = "Substitute", -- the highlight group used for highlighting the identifier's new name
 }
 ```
