@@ -7,13 +7,14 @@ M.default_config = {
 
 local state = {
   should_fetch_references = true,
-  orig_lines = nil,
+  cached_lines = nil,
   lsp_positions = nil,
   err = nil,
 }
 
 local function set_error(msg, level)
   state.err = { msg = msg, level = level }
+  state.cached_lines = nil
 end
 
 -- Get positions of LSP reference symbols
@@ -54,23 +55,23 @@ local function fetch_references(bufnr)
       end, result)
     )
 
-    state.orig_lines = {}
+    state.cached_lines = {}
     for _, position in ipairs(state.lsp_positions) do
       local line_nr = position.start.line
       local line = vim.api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
       local start_col, end_col = position.start.character, position["end"].character
       local line_item = { text = line, start_col = start_col, end_col = end_col }
       -- Same line was already seen, this case needs to be handled separately
-      if state.orig_lines[line_nr] then
-        table.insert(state.orig_lines[line_nr], line_item)
+      if state.cached_lines[line_nr] then
+        table.insert(state.cached_lines[line_nr], line_item)
       else
-        state.orig_lines[line_nr] = { line_item }
+        state.cached_lines[line_nr] = { line_item }
       end
     end
 
     -- Some LSP servers like bashls send items with the same positions multiple times,
     -- filter out these duplicates to avoid highlighting issues.
-    for line_nr, line_items in pairs(state.orig_lines) do
+    for line_nr, line_items in pairs(state.cached_lines) do
       local len = #line_items
       if len > 1 then
         -- This naive implementation only filters out items that are duplicates
@@ -83,7 +84,7 @@ local function fetch_references(bufnr)
             filtered_lines[i] = line_items[i]
           end
         end
-        state.orig_lines[line_nr] = filtered_lines
+        state.cached_lines[line_nr] = filtered_lines
       end
     end
   end)
@@ -102,8 +103,9 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     return
   end
 
-  -- Started fetching references but the results did not arrive yet.
-  if not state.orig_lines then
+  -- Started fetching references but the results did not arrive yet
+  -- (or an error occurred while fetching them).
+  if not state.cached_lines then
     return
   end
 
@@ -113,7 +115,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     return
   end
 
-  for line_nr, line_items in pairs(state.orig_lines) do
+  for line_nr, line_items in pairs(state.cached_lines) do
     local offset = 0
     local updated_line = line_items[1].text
     local highlight_positions = {}
@@ -155,6 +157,7 @@ end
 -- Called when the command is executed (user pressed enter)
 local function incremental_rename_execute(opts)
   -- Any errors that occur in the preview function are not directly shown to the user but are stored in vim.v.errmsg.
+  -- For more info, see https://github.com/neovim/neovim/issues/18910.
   if vim.v.errmsg ~= "" then
     vim.notify(
       "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:\n"
