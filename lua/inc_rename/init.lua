@@ -57,15 +57,18 @@ local function fetch_references(bufnr)
 
     state.cached_lines = {}
     for _, position in ipairs(state.lsp_positions) do
-      local line_nr = position.start.line
-      local line = vim.api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
-      local start_col, end_col = position.start.character, position["end"].character
-      local line_item = { text = line, start_col = start_col, end_col = end_col }
-      -- Same line was already seen, this case needs to be handled separately
-      if state.cached_lines[line_nr] then
-        table.insert(state.cached_lines[line_nr], line_item)
-      else
-        state.cached_lines[line_nr] = { line_item }
+      -- E.g. sumneko_lua sends ranges across multiple lines when a table value is a function, skip this range.
+      if position.start.line == position["end"].line then
+        local line_nr = position.start.line
+        local line = vim.api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
+        local start_col, end_col = position.start.character, position["end"].character
+        local line_item = { text = line, start_col = start_col, end_col = end_col }
+        -- Same line was already seen, this case needs to be handled separately
+        if state.cached_lines[line_nr] then
+          table.insert(state.cached_lines[line_nr], line_item)
+        else
+          state.cached_lines[line_nr] = { line_item }
+        end
       end
     end
 
