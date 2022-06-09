@@ -9,20 +9,36 @@ local state = {
   should_fetch_references = true,
   orig_lines = nil,
   lsp_positions = nil,
+  err = nil,
 }
 
+local function set_error(msg, level)
+  state.err = { msg = msg, level = level }
+end
+
+-- Get positions of LSP reference symbols
 local function fetch_references(bufnr)
-  -- Get positions of LSP reference symbols
+  local clients = vim.lsp.get_active_clients {
+    bufnr = bufnr,
+  }
+  clients = vim.tbl_filter(function(client)
+    return client.supports_method("textDocument/rename")
+  end, clients)
+
+  if #clients == 0 then
+    set_error("[inc-rename] No active language server with rename capability")
+    return
+  end
+
   local params = vim.lsp.util.make_position_params()
   params.context = { includeDeclaration = true }
-
   vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, _, _)
     if err then
-      vim.notify("[inc-rename] Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
+      set_error("[inc-rename] Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
       return
     end
     if not result or vim.tbl_isempty(result) then
-      vim.notify("[inc-rename] No results from textDocument/references.", vim.lsp.log_levels.WARN)
+      set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
       return
     end
 
@@ -80,6 +96,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   -- should_fetch_references will be reset when the command is cancelled (see setup function).
   if state.should_fetch_references then
     state.should_fetch_references = false
+    state.err = nil
     fetch_references(bufnr)
     return
   end
@@ -129,9 +146,13 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   return 2
 end
 
--- Runs when the command is executed (user pressed enter)
+-- Called when the command is executed (user pressed enter)
 local function incremental_rename_execute(opts)
-  vim.lsp.buf.rename(opts.args)
+  if state.err then
+    vim.notify(state.err.msg, state.err.msg)
+  else
+    vim.lsp.buf.rename(opts.args)
+  end
   state.should_fetch_references = true
 end
 
