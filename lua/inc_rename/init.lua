@@ -70,15 +70,16 @@ local function fetch_references(bufnr)
         state.orig_lines[line_nr] = filtered_lines
       end
     end
-    state.should_fetch_references = false
   end)
 end
 
 -- Called when the user is still typing the command or the command arguments
 local function incremental_rename_preview(opts, preview_ns, preview_buf)
   local bufnr = vim.api.nvim_get_current_buf()
-  -- Store the lines of the buffer at the first invocation
+  -- Store the lines of the buffer at the first invocation.
+  -- should_fetch_references will be reset when the command is cancelled (see setup function).
   if state.should_fetch_references then
+    state.should_fetch_references = false
     fetch_references(bufnr)
     return
   end
@@ -146,7 +147,7 @@ end
 M.setup = function(user_config)
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
   local id = vim.api.nvim_create_augroup("inc_rename.nvim", { clear = true })
-  -- We need to be able to tell when the command was aborted to refetch the references.
+  -- We need to be able to tell when the command was cancelled to refetch the references.
   -- Otherwise the same variable would be renamed every time.
   vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
     group = id,
