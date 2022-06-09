@@ -91,6 +91,7 @@ end
 
 -- Called when the user is still typing the command or the command arguments
 local function incremental_rename_preview(opts, preview_ns, preview_buf)
+  vim.v.errmsg = ""
   local bufnr = vim.api.nvim_get_current_buf()
   -- Store the lines of the buffer at the first invocation.
   -- should_fetch_references will be reset when the command is cancelled (see setup function).
@@ -98,6 +99,11 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     state.should_fetch_references = false
     state.err = nil
     fetch_references(bufnr)
+    return
+  end
+
+  -- Started fetching references but the results did not arrive yet.
+  if not state.orig_lines then
     return
   end
 
@@ -148,7 +154,14 @@ end
 
 -- Called when the command is executed (user pressed enter)
 local function incremental_rename_execute(opts)
-  if state.err then
+  -- Any errors that occur in the preview function are not directly shown to the user but are stored in vim.v.errmsg.
+  if vim.v.errmsg ~= "" then
+    vim.notify(
+      "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:\n"
+        .. vim.v.errmsg,
+      vim.lsp.log_levels.ERROR
+    )
+  elseif state.err then
     vim.notify(state.err.msg, state.err.msg)
   else
     vim.lsp.buf.rename(opts.args)
