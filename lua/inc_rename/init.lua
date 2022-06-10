@@ -3,13 +3,113 @@ local M = {}
 M.default_config = {
   cmd_name = "IncRename",
   hl_group = "Substitute",
+  multifile_preview = false,
 }
 
 local state = {
   should_fetch_references = true,
+  preview_strategy = nil,
   cached_lines = nil,
-  lsp_positions = nil,
+  -- Contains created namespace (used in multifile-strategy)
+  preview_ns = nil,
   err = nil,
+}
+
+local single_file_strategy = {
+  cache_lines = function(result, bufnr)
+    local cached_lines = {}
+    local uri = vim.uri_from_bufnr(bufnr)
+    local lsp_ranges = vim.tbl_map(
+      function(item)
+        return item.range
+      end,
+      vim.tbl_filter(function(item)
+        -- Only include references from current file
+        return item.uri == uri
+      end, result)
+    )
+
+    for _, range in ipairs(lsp_ranges) do
+      -- E.g. sumneko_lua sends ranges across multiple lines when a table value is a function, skip this range.
+      if range.start.line == range["end"].line then
+        local line_nr = range.start.line
+        local line = vim.api.nvim_buf_get_lines(0, line_nr, line_nr + 1, false)[1]
+        local start_col, end_col = range.start.character, range["end"].character
+        local line_item = { text = line, start_col = start_col, end_col = end_col }
+        -- Same line was already seen
+        if cached_lines[line_nr] then
+          table.insert(cached_lines[line_nr], line_item)
+        else
+          cached_lines[line_nr] = { line_item }
+        end
+      end
+    end
+    return cached_lines
+  end,
+  apply_highlights = function(cached_lines, apply_highlights_fn)
+    for line_nr, line_info in pairs(cached_lines) do
+      apply_highlights_fn(0, line_nr, line_info)
+    end
+  end,
+  restore_buffer_state = function(_)
+    -- no-op
+  end,
+}
+
+local multi_file_strategy = {
+  cache_lines = function(result, _)
+    local cached_lines = {}
+    for _, res in ipairs(result) do
+      local range = res.range
+      -- E.g. sumneko_lua sends ranges across multiple lines when a table value is a function, skip this range.
+      if range.start.line == range["end"].line then
+        local bufnr = vim.uri_to_bufnr(res.uri)
+        -- Only need to highlight loaded buffers
+        if vim.api.nvim_buf_is_loaded(bufnr) then
+          if not cached_lines[bufnr] then
+            cached_lines[bufnr] = {}
+          end
+
+          local line_nr = range.start.line
+          local line = vim.api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
+          local start_col, end_col = range.start.character, range["end"].character
+          local line_info = { text = line, start_col = start_col, end_col = end_col }
+          -- Same line was already seen
+          if cached_lines[bufnr][line_nr] then
+            table.insert(cached_lines[bufnr][line_nr], line_info)
+          else
+            cached_lines[bufnr][line_nr] = { line_info }
+          end
+        end
+      end
+    end
+    vim.v.errmsg = vim.inspect(cached_lines)
+    return cached_lines
+  end,
+  apply_highlights = function(cached_lines, apply_highlights_fn)
+    for bufnr, line_info_per_bufnr in pairs(cached_lines) do
+      for line_nr, line_info in pairs(line_info_per_bufnr) do
+        apply_highlights_fn(bufnr, line_nr, line_info)
+      end
+    end
+  end,
+  restore_buffer_state = function(cached_lines)
+    if cached_lines then
+      local cur_bufnr = vim.api.nvim_get_current_buf()
+      -- Reset highlights and buffer lines
+      for bufnr, line_info_per_bufnr in pairs(cached_lines) do
+        if bufnr ~= cur_bufnr then
+          vim.api.nvim_buf_clear_namespace(bufnr, state.preview_ns, 0, -1)
+        end
+        for line_nr, line_info in pairs(line_info_per_bufnr) do
+          for _, inter_line_info in ipairs(line_info) do
+            vim.api.nvim_buf_set_lines(bufnr, line_nr, line_nr + 1, true, { inter_line_info.text })
+          end
+        end
+      end
+      state.should_fetch_references = true
+    end
+  end,
 }
 
 local function set_error(msg, level)
@@ -43,34 +143,7 @@ local function fetch_references(bufnr)
       return
     end
 
-    local uri = vim.uri_from_bufnr(bufnr)
-
-    state.lsp_positions = vim.tbl_map(
-      function(item)
-        return item.range
-      end,
-      vim.tbl_filter(function(item)
-        -- Only include references from current file
-        return item.uri == uri
-      end, result)
-    )
-
-    state.cached_lines = {}
-    for _, position in ipairs(state.lsp_positions) do
-      -- E.g. sumneko_lua sends ranges across multiple lines when a table value is a function, skip this range.
-      if position.start.line == position["end"].line then
-        local line_nr = position.start.line
-        local line = vim.api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
-        local start_col, end_col = position.start.character, position["end"].character
-        local line_item = { text = line, start_col = start_col, end_col = end_col }
-        -- Same line was already seen, this case needs to be handled separately
-        if state.cached_lines[line_nr] then
-          table.insert(state.cached_lines[line_nr], line_item)
-        else
-          state.cached_lines[line_nr] = { line_item }
-        end
-      end
-    end
+    state.cached_lines = state.preview_strategy.cache_lines(result, bufnr)
 
     -- Some LSP servers like bashls send items with the same positions multiple times,
     -- filter out these duplicates to avoid highlighting issues.
@@ -96,13 +169,12 @@ end
 -- Called when the user is still typing the command or the command arguments
 local function incremental_rename_preview(opts, preview_ns, preview_buf)
   vim.v.errmsg = ""
-  local bufnr = vim.api.nvim_get_current_buf()
   -- Store the lines of the buffer at the first invocation.
   -- should_fetch_references will be reset when the command is cancelled (see setup function).
   if state.should_fetch_references then
     state.should_fetch_references = false
     state.err = nil
-    fetch_references(bufnr)
+    fetch_references(vim.api.nvim_get_current_buf())
     return
   end
 
@@ -118,24 +190,25 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     return
   end
 
-  for line_nr, line_items in pairs(state.cached_lines) do
+  local function apply_highlights_fn(bufnr, line_nr, line_info)
     local offset = 0
-    local updated_line = line_items[1].text
+    local updated_line = line_info[1].text
     local highlight_positions = {}
 
-    for _, item in ipairs(line_items) do
-      updated_line = updated_line:sub(1, item.start_col + offset)
+    for _, info in ipairs(line_info) do
+      updated_line = updated_line:sub(1, info.start_col + offset)
         .. new_name
-        .. updated_line:sub(item.end_col + 1 + offset)
+        .. updated_line:sub(info.end_col + 1 + offset)
+
       table.insert(highlight_positions, {
-        start_col = item.start_col + offset,
-        end_col = item.start_col + #new_name + offset,
+        start_col = info.start_col + offset,
+        end_col = info.start_col + #new_name + offset,
       })
       -- Offset by the length difference between the new and old names
-      offset = offset + #new_name - (item.end_col - item.start_col)
+      offset = offset + #new_name - (info.end_col - info.start_col)
     end
 
-    vim.api.nvim_buf_set_lines(0, line_nr, line_nr + 1, false, { updated_line })
+    vim.api.nvim_buf_set_lines(bufnr, line_nr, line_nr + 1, false, { updated_line })
     if preview_buf then
       vim.api.nvim_buf_set_lines(preview_buf, line_nr, line_nr + 1, false, { updated_line })
     end
@@ -154,6 +227,9 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
       end
     end
   end
+
+  state.preview_strategy.apply_highlights(state.cached_lines, apply_highlights_fn)
+  state.preview_ns = preview_ns
   return 2
 end
 
@@ -186,13 +262,15 @@ end
 
 M.setup = function(user_config)
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
+  state.preview_strategy = M.config.multifile_preview and multi_file_strategy or single_file_strategy
+
   local id = vim.api.nvim_create_augroup("inc_rename.nvim", { clear = true })
   -- We need to be able to tell when the command was cancelled to refetch the references.
   -- Otherwise the same variable would be renamed every time.
   vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
     group = id,
     callback = vim.schedule_wrap(function()
-      state.should_fetch_references = true
+      state.preview_strategy.restore_buffer_state(state.cached_lines)
     end),
   })
   create_user_command(M.config.cmd_name)
