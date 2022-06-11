@@ -1,6 +1,6 @@
 # inc-rename.nvim
 
-A tiny Neovim plugin that provides a command for LSP renaming with immediate visual
+A small Neovim plugin that provides a command for LSP renaming with immediate visual
 feedback thanks to Neovim's command preview feature. Requires Neovim nightly (0.8).
 
 <div align="center">
@@ -41,5 +41,8 @@ The default options are:
 require("inc_rename.nvim").setup {
   cmd_name = "IncRename", -- the name of the command
   hl_group = "Substitute", -- the highlight group used for highlighting the identifier's new name
+  multifile_preview = false, -- whether to enable the command preview across multiple buffers
 }
 ```
+
+> :rocket: The multi-file preview feature is currently opt-in, please help me test it and leave some feedback [here](https://github.com/smjonas/inc-rename.nvim/issues/5)!
