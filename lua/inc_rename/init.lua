@@ -15,6 +15,11 @@ local state = {
   err = nil,
 }
 
+local function set_error(msg, level)
+  state.err = { msg = msg, level = level }
+  state.cached_lines = nil
+end
+
 local single_file_strategy = {
   cache_lines = function(result, bufnr)
     local cached_lines = {}
@@ -46,13 +51,19 @@ local single_file_strategy = {
     end
     return cached_lines
   end,
+  filter_duplicates = function(cached_lines, filter_duplicates_fn)
+    for line_nr, line_info in pairs(cached_lines) do
+      cached_lines = filter_duplicates_fn(cached_lines, line_nr, line_info)
+    end
+    return cached_lines
+  end,
   apply_highlights = function(cached_lines, apply_highlights_fn)
     for line_nr, line_info in pairs(cached_lines) do
       apply_highlights_fn(0, line_nr, line_info)
     end
   end,
   restore_buffer_state = function(_)
-    -- no-op
+    state.should_fetch_references = true
   end,
 }
 
@@ -83,7 +94,14 @@ local multi_file_strategy = {
         end
       end
     end
-    vim.v.errmsg = vim.inspect(cached_lines)
+    return cached_lines
+  end,
+  filter_duplicates = function(cached_lines, filter_duplicates_fn)
+    for bufnr, line_info_per_bufnr in pairs(cached_lines) do
+      for line_nr, line_info in pairs(line_info_per_bufnr) do
+        cached_lines[bufnr] = filter_duplicates_fn(cached_lines[bufnr], line_nr, line_info)
+      end
+    end
     return cached_lines
   end,
   apply_highlights = function(cached_lines, apply_highlights_fn)
@@ -111,11 +129,6 @@ local multi_file_strategy = {
     end
   end,
 }
-
-local function set_error(msg, level)
-  state.err = { msg = msg, level = level }
-  state.cached_lines = nil
-end
 
 -- Get positions of LSP reference symbols
 local function fetch_references(bufnr)
@@ -145,9 +158,9 @@ local function fetch_references(bufnr)
 
     state.cached_lines = state.preview_strategy.cache_lines(result, bufnr)
 
-    -- Some LSP servers like bashls send items with the same positions multiple times,
-    -- filter out these duplicates to avoid highlighting issues.
-    for line_nr, line_items in pairs(state.cached_lines) do
+    local filter_duplicates = function(cached_lines, line_nr, line_items)
+      -- Some LSP servers like bashls send items with the same positions multiple times,
+      -- filter out these duplicates to avoid highlighting issues.
       local len = #line_items
       if len > 1 then
         -- This naive implementation only filters out items that are duplicates
@@ -160,9 +173,12 @@ local function fetch_references(bufnr)
             filtered_lines[i] = line_items[i]
           end
         end
-        state.cached_lines[line_nr] = filtered_lines
+        cached_lines[line_nr] = filtered_lines
       end
+      return cached_lines
     end
+
+    state.cached_lines = state.preview_strategy.filter_duplicates(state.cached_lines, filter_duplicates)
   end)
 end
 
