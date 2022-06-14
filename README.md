@@ -9,7 +9,7 @@ feedback thanks to Neovim's command preview feature. Requires Neovim nightly (0.
 
 ## Installation
 Install using your favorite package manager and call the `setup` function.
-Here is an example using `packer.nvim`:
+Here is an example using packer.nvim:
 ```lua
 use {
   "smjonas/inc-rename.nvim",
@@ -22,11 +22,11 @@ use {
 ## Usage
 Simply type `:IncRename <new_name>` while your cursor is on an LSP identifier.
 You could also create a keymap that types out the command name for you so you only have to
-type the new name:
+enter the new name:
 ```lua
 vim.keymap.set("n", "<leader>rn", ":IncRename ")
 ```
-If you want to prefill the word under the cursor you can do the following:
+If you want to prefill the word under the cursor you can use the following:
 ```lua
 vim.keymap.set("n", "<leader>rn", function()
   return ":IncRename " .. vim.fn.expand("<cword>")
@@ -35,14 +35,12 @@ end, { expr = true })
 
 
 ## Customization
-You can override the default configuration by passing a Lua table to the `setup` function.
+You can override the default settings by passing a Lua table to the `setup` function.
 The default options are:
 ```lua
 require("inc_rename.nvim").setup {
   cmd_name = "IncRename", -- the name of the command
   hl_group = "Substitute", -- the highlight group used for highlighting the identifier's new name
-  multifile_preview = false, -- whether to enable the command preview across multiple buffers
+  multifile_preview = true, -- whether to enable the command preview across multiple buffers
 }
 ```
-
-> :rocket: The multi-file preview feature is currently opt-in, please help me test it and leave some feedback [here](https://github.com/smjonas/inc-rename.nvim/issues/5)!

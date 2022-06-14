@@ -3,7 +3,7 @@ local M = {}
 M.default_config = {
   cmd_name = "IncRename",
   hl_group = "Substitute",
-  multifile_preview = false,
+  multifile_preview = true,
 }
 
 local state = {
