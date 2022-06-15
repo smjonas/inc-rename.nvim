@@ -125,8 +125,8 @@ local multi_file_strategy = {
           end
         end
       end
-      state.should_fetch_references = true
     end
+    state.should_fetch_references = true
   end,
 }
 
@@ -286,7 +286,9 @@ M.setup = function(user_config)
   vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
     group = id,
     callback = vim.schedule_wrap(function()
-      state.preview_strategy.restore_buffer_state(state.cached_lines)
+      if not state.should_fetch_references then
+        state.preview_strategy.restore_buffer_state(state.cached_lines)
+      end
     end),
   })
   create_user_command(M.config.cmd_name)
