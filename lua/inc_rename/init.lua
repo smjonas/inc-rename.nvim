@@ -118,10 +118,10 @@ local multi_file_strategy = {
       for bufnr, line_info_per_bufnr in pairs(cached_lines) do
         if bufnr ~= cur_bufnr then
           vim.api.nvim_buf_clear_namespace(bufnr, state.preview_ns, 0, -1)
-        end
-        for line_nr, line_info in pairs(line_info_per_bufnr) do
-          for _, inter_line_info in ipairs(line_info) do
-            vim.api.nvim_buf_set_lines(bufnr, line_nr, line_nr + 1, true, { inter_line_info.text })
+          for line_nr, line_info in pairs(line_info_per_bufnr) do
+            for _, inter_line_info in ipairs(line_info) do
+              vim.api.nvim_buf_set_lines(bufnr, line_nr, line_nr + 1, true, { inter_line_info.text })
+            end
           end
         end
       end
