@@ -271,7 +271,10 @@ local create_user_command = function(cmd_name)
   -- Create the user command
   vim.api.nvim_create_user_command(
     cmd_name,
-    incremental_rename_execute,
+    -- Schedule wrapping here avoids an (uncommon) issue where buffer contents were
+    -- changed by the highlight function after the rename request had already been executed.
+    -- (Probably because synchronous LSP requests are not queued like Nvim API calls?)
+    vim.schedule_wrap(incremental_rename_execute),
     { nargs = 1, addr = "lines", preview = incremental_rename_preview }
   )
 end
