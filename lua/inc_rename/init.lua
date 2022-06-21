@@ -260,7 +260,7 @@ local function incremental_rename_execute(opts)
       vim.lsp.log_levels.ERROR
     )
   elseif state.err then
-    vim.notify(state.err.msg, state.err.msg)
+    vim.notify(state.err.msg, state.err.level)
   else
     vim.lsp.buf.rename(opts.args)
   end
