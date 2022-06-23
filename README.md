@@ -42,6 +42,6 @@ require("inc_rename.nvim").setup {
   cmd_name = "IncRename", -- the name of the command
   hl_group = "Substitute", -- the highlight group used for highlighting the identifier's new name
   multifile_preview = true, -- whether to enable the command preview across multiple buffers
-  show_renamed_message = true,
+  show_renamed_message = true, -- whether to enable `renamed X instances in Y files` messages after a rename operation.
 }
 ```
