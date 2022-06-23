@@ -4,6 +4,7 @@ M.default_config = {
   cmd_name = "IncRename",
   hl_group = "Substitute",
   multifile_preview = true,
+  show_renamed_message = true,
 }
 
 local state = {
@@ -283,14 +284,16 @@ local function send_rename_request(new_name)
     vim.lsp.util.apply_workspace_edit(res, client.offset_encoding)
 
     -- display a message
-    local changes = count_lsp_res_changes(res)
-    local message = string.format("renamed %s instance%s in %s file%s",
-      changes.instances,
-      changes.instances== 1 and '' or 's',
-      changes.files,
-      changes.files == 1 and '' or 's'
-    )
-    vim.notify(message)
+    if (M.config.show_renamed_message) then
+      local changes = count_lsp_res_changes(res)
+      local message = string.format("renamed %s instance%s in %s file%s",
+        changes.instances,
+        changes.instances == 1 and '' or 's',
+        changes.files,
+        changes.files == 1 and '' or 's'
+      )
+      vim.notify(message)
+    end
   end)
 end
 
