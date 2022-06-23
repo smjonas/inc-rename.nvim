@@ -249,6 +249,51 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   return 2
 end
 
+-- Returns a table containing the lsp changes counts from an lsp result
+local function count_lsp_res_changes(lsp_res)
+  local count = { instances = 0, files = 0 }
+  if (lsp_res.documentChanges) then
+    for _, changed_file in pairs(lsp_res.documentChanges) do
+      count.files = count.files + 1
+      count.instances = count.instances + #changed_file.edits
+    end
+  elseif (lsp_res.changes) then
+    for _, changed_file in pairs(lsp_res.changes) do
+      count.instances = count.instances + #changed_file
+      count.files = count.files + 1
+    end
+  end
+  return count
+end
+
+-- Called when a textDocument/rename request is sent to the language server
+local function send_rename_request(new_name)
+  local params = vim.lsp.util.make_position_params()
+  params.newName = new_name
+
+  vim.lsp.buf_request(0, "textDocument/rename", params, function(err, res, ctx, _)
+    if err then
+      if err.message then vim.notify(err.message, vim.log.levels.ERROR) end
+      return
+    end
+    if not res then return end
+
+    -- apply renames
+    local client = vim.lsp.get_client_by_id(ctx.client_id)
+    vim.lsp.util.apply_workspace_edit(res, client.offset_encoding)
+
+    -- display a message
+    local changes = count_lsp_res_changes(res)
+    local message = string.format("renamed %s instance%s in %s file%s",
+      changes.instances,
+      changes.instances== 1 and '' or 's',
+      changes.files,
+      changes.files == 1 and '' or 's'
+    )
+    vim.notify(message)
+  end)
+end
+
 -- Called when the command is executed (user pressed enter)
 local function incremental_rename_execute(opts)
   -- Any errors that occur in the preview function are not directly shown to the user but are stored in vim.v.errmsg.
@@ -262,7 +307,7 @@ local function incremental_rename_execute(opts)
   elseif state.err then
     vim.notify(state.err.msg, state.err.level)
   else
-    vim.lsp.buf.rename(opts.args)
+    send_rename_request(opts.args)
   end
   state.should_fetch_references = true
 end
