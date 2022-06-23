@@ -4,7 +4,7 @@ M.default_config = {
   cmd_name = "IncRename",
   hl_group = "Substitute",
   multifile_preview = true,
-  show_renamed_message = true,
+  show_message = true,
 }
 
 local state = {
@@ -132,7 +132,7 @@ local multi_file_strategy = {
 }
 
 -- Get positions of LSP reference symbols
-local function fetch_references(bufnr)
+local function fetch_lsp_references(bufnr)
   local clients = vim.lsp.get_active_clients {
     bufnr = bufnr,
   }
@@ -191,7 +191,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   if state.should_fetch_references then
     state.should_fetch_references = false
     state.err = nil
-    fetch_references(vim.api.nvim_get_current_buf())
+    fetch_lsp_references(vim.api.nvim_get_current_buf())
     return
   end
 
@@ -250,47 +250,42 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   return 2
 end
 
--- Returns a table containing the lsp changes counts from an lsp result
-local function count_lsp_res_changes(lsp_res)
-  local count = { instances = 0, files = 0 }
-  if (lsp_res.documentChanges) then
-    for _, changed_file in pairs(lsp_res.documentChanges) do
-      count.files = count.files + 1
-      count.instances = count.instances + #changed_file.edits
-    end
-  elseif (lsp_res.changes) then
-    for _, changed_file in pairs(lsp_res.changes) do
-      count.instances = count.instances + #changed_file
-      count.files = count.files + 1
-    end
-  end
-  return count
-end
-
--- Called when a textDocument/rename request is sent to the language server
-local function send_rename_request(new_name)
+-- Sends a LSP rename request and optionally displays a message to the user showing
+-- how many instances were renamed in how many files
+local function perform_lsp_rename(new_name)
   local params = vim.lsp.util.make_position_params()
   params.newName = new_name
 
-  vim.lsp.buf_request(0, "textDocument/rename", params, function(err, res, ctx, _)
-    if err then
-      if err.message then vim.notify(err.message, vim.log.levels.ERROR) end
+  vim.lsp.buf_request(0, "textDocument/rename", params, function(err, result, ctx, _)
+    if err and err.message then
+      vim.notify("[inc-rename] Error while renaming: " .. err.message, vim.lsp.log_levels.ERROR)
       return
     end
-    if not res then return end
 
-    -- apply renames
+    if not result or vim.tbl_isempty(result) then
+      set_error("[inc-rename] Nothing renamed", vim.lsp.log_levels.WARN)
+      return
+    end
+
     local client = vim.lsp.get_client_by_id(ctx.client_id)
-    vim.lsp.util.apply_workspace_edit(res, client.offset_encoding)
+    vim.lsp.util.apply_workspace_edit(result, client.offset_encoding)
 
-    -- display a message
-    if (M.config.show_renamed_message) then
-      local changes = count_lsp_res_changes(res)
-      local message = string.format("renamed %s instance%s in %s file%s",
-        changes.instances,
-        changes.instances == 1 and '' or 's',
-        changes.files,
-        changes.files == 1 and '' or 's'
+    if M.config.show_message then
+      local changed_instances = 0
+      local changed_files = 0
+
+      local with_edits = result.documentChanges ~= nil
+      for _, change in pairs(result.documentChanges or result.changes) do
+        changed_instances = changed_instances + (with_edits and #change.edits or #change)
+        changed_files = changed_files + 1
+      end
+
+      local message = string.format(
+        "Renamed %s instance%s in %s file%s",
+        changed_instances,
+        changed_instances == 1 and "" or "s",
+        changed_files,
+        changed_files == 1 and "" or "s"
       )
       vim.notify(message)
     end
@@ -310,7 +305,7 @@ local function incremental_rename_execute(opts)
   elseif state.err then
     vim.notify(state.err.msg, state.err.level)
   else
-    send_rename_request(opts.args)
+    perform_lsp_rename(opts.args)
   end
   state.should_fetch_references = true
 end
