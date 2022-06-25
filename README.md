@@ -33,12 +33,54 @@ vim.keymap.set("n", "<leader>rn", function()
 end, { expr = true })
 ```
 
+<details>
+  <summary style="font-size: 14pt">&#127800; <code>dressing.nvim</code> support</summary>
+
+</br>If your are using [dressing.nvim](https://github.com/stevearc/dressing.nvim)
+or a similar plugin that uses a separate buffer for typing the new name,
+you can call the `rename` function that `inc-rename` provides:
+```lua
+require("inc_rename").rename(opts | nil)
+
+-- To prefill the word under the cursor, pass a default value:
+require("inc_rename").rename({ default = vim.fn.expand("<cword>") })
+```
+
+This function calls `vim.ui.input()` with the optional default input (which `dressing.nvim` hijacks)
+and manages the highlighting in a more manual way (that means highlighting does not rely on Neovim's
+command-preview feature).
+> :warning: Note that highlighting will not work with the builtin `vim.ui.input` function
+> because it is currently not possible to modify the buffer while the user is still typing
+> in the command line.
+
+The result should look something like this:
+<div align="center">
+<img src="https://user-images.githubusercontent.com/40792180/175773326-df2b6f92-9865-4fea-a08b-cbe89e5dd1b0.png">
+</div>
+</br>
+
+> :bulb: Tip - try these `dressing.nvim` settings to position the input box above the
+> cursor to not cover the word being renamed (thank you
+> [@RaafatTurki](https://github.com/RaafatTurki) for the suggestion!):
+```lua
+require("dressing").setup {
+  input = {
+    override = function(conf)
+      conf.col = -1
+      conf.row = 0
+      return conf
+    end,
+  },
+}
+```
+
+</details>
 
 ## Customization
 You can override the default settings by passing a Lua table to the `setup` function.
 The default options are:
 ```lua
-require("inc_rename.nvim").setup {
+require("inc_rename").setup {
   cmd_name = "IncRename", -- the name of the command
   hl_group = "Substitute", -- the highlight group used for highlighting the identifier's new name
   multifile_preview = true, -- whether to enable the command preview across multiple buffers
