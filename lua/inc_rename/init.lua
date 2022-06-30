@@ -377,7 +377,7 @@ M.setup = function(user_config)
   vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
     group = id,
     callback = vim.schedule_wrap(function()
-      if not state.should_fetch_references then
+      if state.preview_ns then
         state.preview_strategy.restore_buffer_state(true, { restore_text = true })
       end
     end),
