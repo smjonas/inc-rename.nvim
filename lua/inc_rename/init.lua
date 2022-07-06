@@ -368,6 +368,13 @@ local create_user_command = function(cmd_name)
 end
 
 M.setup = function(user_config)
+  if vim.fn.has("nvim-0.8.0") ~= 1 then
+    vim.notify(
+      "[inc_rename] This plugin requires Neovim nightly (0.8). Please upgrade your Neovim version.",
+      vim.lsp.log_levels.ERROR
+    )
+    return
+  end
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
   state.preview_strategy = M.config.multifile_preview and multi_file_strategy or single_file_strategy
 
@@ -378,7 +385,7 @@ M.setup = function(user_config)
     group = id,
     callback = vim.schedule_wrap(function()
       if state.preview_ns then
-        state.preview_strategy.restore_buffer_state(true, { restore_text = true })
+        state.preview_strategy.restore_buffer_state(true)
       end
     end),
   })

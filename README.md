@@ -1,13 +1,15 @@
 # inc-rename.nvim
 
 A small Neovim plugin that provides a command for LSP renaming with immediate visual
-feedback thanks to Neovim's command preview feature. Requires Neovim nightly (0.8).
+feedback thanks to Neovim's command preview feature.
 
 <div align="center">
 <video src="https://user-images.githubusercontent.com/40792180/171936247-9a4af4f8-fcc6-4c0c-a230-5d65339cd29c.mp4" width="85%">
 </div>
 
 ## Installation
+**This plugin requires Neovim's nightly version (0.8).**
+
 Install using your favorite package manager and call the `setup` function.
 Here is an example using packer.nvim:
 ```lua
@@ -34,7 +36,7 @@ end, { expr = true })
 ```
 
 <details>
-  <summary style="font-size: 14pt">&#127800; <code>dressing.nvim</code> support</summary>
+<summary>&#127800; <code>dressing.nvim</code> support</summary>
 
 </br>If your are using [dressing.nvim](https://github.com/stevearc/dressing.nvim)
 or a similar plugin that uses a separate buffer for typing the new name,
