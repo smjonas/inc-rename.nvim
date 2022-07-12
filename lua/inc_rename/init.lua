@@ -5,6 +5,7 @@ M.default_config = {
   hl_group = "Substitute",
   multifile_preview = true,
   show_message = true,
+  post_hook = nil,
 }
 
 local state = {
@@ -306,6 +307,9 @@ local function perform_lsp_rename(new_name)
         changed_files == 1 and "" or "s"
       )
       vim.notify(message)
+    end
+    if M.config.post_hook then
+      M.config.post_hook(result)
     end
   end)
 end

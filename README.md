@@ -87,5 +87,6 @@ require("inc_rename").setup {
   hl_group = "Substitute", -- the highlight group used for highlighting the identifier's new name
   multifile_preview = true, -- whether to enable the command preview across multiple buffers
   show_message = true, -- whether to display a `Renamed m instances in n files` message after a rename operation
+  post_hook = nil, -- callback to run after renaming, receives the result table (from LSP handler) as an argument
 }
 ```
