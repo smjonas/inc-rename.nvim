@@ -3,6 +3,7 @@ local M = {}
 M.default_config = {
   cmd_name = "IncRename",
   hl_group = "Substitute",
+  preview_empty_name = false,
   multifile_preview = true,
   show_message = true,
   post_hook = nil,
@@ -218,6 +219,9 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   end
 
   local new_name = opts.args
+  if not M.config.preview_empty_name and new_name:find("^%s*$") then
+    return
+  end
 
   local function apply_highlights_fn(bufnr, line_nr, line_info)
     local offset = 0
