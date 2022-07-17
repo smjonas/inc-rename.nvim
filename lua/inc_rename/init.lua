@@ -209,7 +209,6 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     state.should_fetch_references = false
     state.err = nil
     fetch_lsp_references(opts.bufnr or vim.api.nvim_get_current_buf(), opts.lsp_params)
-    return
   end
 
   -- Started fetching references but the results did not arrive yet
@@ -320,24 +319,19 @@ end
 
 -- Called when the command is executed (user pressed enter)
 local function incremental_rename_execute(new_name)
-  -- Schedule wrapping here avoids an (uncommon) issue where buffer contents were
-  -- changed by the highlight function after the rename request had already been executed.
-  -- (Probably because synchronous LSP requests are not queued like Nvim API calls?)
-  vim.schedule(function()
-    -- Any errors that occur in the preview function are not directly shown to the user but are stored in vim.v.errmsg.
-    -- For more info, see https://github.com/neovim/neovim/issues/18910.
-    if vim.v.errmsg ~= "" then
-      vim.notify(
-        "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:\n"
-          .. vim.v.errmsg,
-        vim.lsp.log_levels.ERROR
-      )
-    elseif state.err then
-      vim.notify(state.err.msg, state.err.level)
-    else
-      perform_lsp_rename(new_name)
-    end
-  end)
+  -- Any errors that occur in the preview function are not directly shown to the user but are stored in vim.v.errmsg.
+  -- For more info, see https://github.com/neovim/neovim/issues/18910.
+  if vim.v.errmsg ~= "" then
+    vim.notify(
+      "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:\n"
+        .. vim.v.errmsg,
+      vim.lsp.log_levels.ERROR
+    )
+  elseif state.err then
+    vim.notify(state.err.msg, state.err.level)
+  else
+    perform_lsp_rename(new_name)
+  end
 end
 
 -- This function can be used when using a plugin like dressing.nvim
@@ -383,6 +377,7 @@ M.setup = function(user_config)
     )
     return
   end
+
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
   state.preview_strategy = M.config.multifile_preview and multi_file_strategy or single_file_strategy
 
@@ -391,11 +386,11 @@ M.setup = function(user_config)
   -- Otherwise the same variable would be renamed every time.
   vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
     group = id,
-    callback = vim.schedule_wrap(function()
+    callback = function()
       if state.preview_ns then
         state.preview_strategy.restore_buffer_state(true)
       end
-    end),
+    end,
   })
   create_user_command(M.config.cmd_name)
 end
