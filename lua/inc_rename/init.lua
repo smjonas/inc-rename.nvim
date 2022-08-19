@@ -5,18 +5,39 @@ M.default_config = {
   hl_group = "Substitute",
   preview_empty_name = false,
   show_message = true,
+  input_buffer_type = nil,
   post_hook = nil,
+}
+
+local dressing_config = {
+  filetype = "DressingInput",
+  close_window = function()
+    require("dressing.input").close()
+  end,
 }
 
 local state = {
   should_fetch_references = true,
   cached_lines = nil,
+  input_win_id = nil,
+  input_bufnr = nil,
   err = nil,
 }
 
 local function set_error(msg, level)
   state.err = { msg = msg, level = level }
   state.cached_lines = nil
+end
+
+local function buf_is_visible(bufnr)
+  if vim.api.nvim_buf_is_loaded(bufnr) then
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if vim.api.nvim_win_get_buf(win) == bufnr then
+        return true
+      end
+    end
+  end
+  return false
 end
 
 local function cache_lines(result)
@@ -26,8 +47,7 @@ local function cache_lines(result)
     -- E.g. sumneko_lua sends ranges across multiple lines when a table value is a function, skip this range
     if range.start.line == range["end"].line then
       local bufnr = vim.uri_to_bufnr(res.uri)
-      -- Only need to highlight loaded buffers
-      if vim.api.nvim_buf_is_loaded(bufnr) then
+      if buf_is_visible(bufnr) then
         if not cached_lines[bufnr] then
           cached_lines[bufnr] = {}
         end
@@ -100,26 +120,68 @@ local function fetch_lsp_references(bufnr, lsp_params)
   end)
 end
 
+local function tear_down(switch_buffer)
+  state.cached_lines = nil
+  state.should_fetch_references = true
+  if state.input_win_id and vim.api.nvim_win_is_valid(state.input_win_id) then
+    M.config.input_buffer.close_window()
+    state.input_win_id = nil
+    if switch_buffer then
+      vim.api.nvim_set_current_win(state.win_id)
+    end
+  end
+end
+
+local function initialize_input_buffer(default)
+  state.win_id = vim.api.nvim_get_current_win()
+  vim.ui.input({ default = default }, function() end)
+  -- Open the input window and find the buffer and window IDs
+  for _, win_id in ipairs(vim.api.nvim_list_wins()) do
+    local bufnr = vim.api.nvim_win_get_buf(win_id)
+    if vim.bo[bufnr].filetype == M.config.input_buffer.filetype then
+      state.input_win_id = win_id
+      state.input_bufnr = bufnr
+    end
+  end
+end
+
 -- Called when the user is still typing the command or the command arguments
 local function incremental_rename_preview(opts, preview_ns, preview_buf)
+  local new_name = opts.args
+  local cur_buf = vim.api.nvim_get_current_buf()
   vim.v.errmsg = ""
+
+  if state.input_win_id and vim.api.nvim_win_is_valid(state.input_win_id) then
+    -- Add a space so the cursor can be placed after the last character
+    vim.api.nvim_buf_set_lines(state.input_bufnr, 0, -1, false, { new_name .. " " })
+    local _, cmd_prefix_len = vim.fn.getcmdline():find("^%s*" .. M.config.cmd_name .. "%s*")
+    local cursor_pos = vim.fn.getcmdpos() - cmd_prefix_len - 1
+    -- Create a fake cursor in the input buffer
+    vim.api.nvim_buf_add_highlight(state.input_bufnr, preview_ns, "Cursor", 0, cursor_pos, cursor_pos + 1)
+  end
+
   -- Store the lines of the buffer at the first invocation.
   -- should_fetch_references will be reset when the command is cancelled (see setup function).
   if state.should_fetch_references then
     state.should_fetch_references = false
     state.err = nil
-    fetch_lsp_references(opts.bufnr or vim.api.nvim_get_current_buf(), opts.lsp_params)
+    fetch_lsp_references(opts.bufnr or cur_buf, opts.lsp_params)
+
+    if M.config.input_buffer ~= nil then
+      initialize_input_buffer(opts.args)
+    end
   end
 
   -- Started fetching references but the results did not arrive yet
   -- (or an error occurred while fetching them).
   if not state.cached_lines then
-    return
+    -- Not returning 2 here somehow won't update the ui.input buffer text
+    -- when state.cached_lines is still nil
+    return M.config.input_buffer ~= nil and 2
   end
 
-  local new_name = opts.args
   if not M.config.preview_empty_name and new_name:find("^%s*$") then
-    return
+    return M.config.input_buffer ~= nil and 2
   end
 
   local function apply_highlights_fn(bufnr, line_nr, line_info)
@@ -235,37 +297,16 @@ local function incremental_rename_execute(new_name)
   elseif state.err then
     vim.notify(state.err.msg, state.err.level)
   else
+    tear_down(true)
     perform_lsp_rename(new_name)
   end
 end
 
--- This function can be used when using a plugin like dressing.nvim
--- (or more generally, when the new name is typed in a separate buffer).
--- That means highlighting is not available with the default vim.ui.input().
-M.rename = function(opts)
-  vim.validate {
-    ["[inc_rename] rename function arguments"] = { opts, "table", true },
-  }
-  opts = opts or {}
-  local ns = vim.api.nvim_create_namespace("inc_rename")
-  local bufnr = vim.api.nvim_get_current_buf()
-  local lsp_params = vim.lsp.util.make_position_params()
-
-  vim.ui.input({
-    prompt = "New name: ",
-    default = opts.default,
-    -- Exploit highlight function as callback
-    highlight = function(new_name)
-      incremental_rename_preview({ args = new_name, bufnr = bufnr, lsp_params = lsp_params }, ns, nil)
-      return {}
-    end,
-  }, function(new_name)
-    state.cached_lines = nil
-    state.should_fetch_references = true
-    if new_name ~= nil then
-      incremental_rename_execute(new_name)
-    end
-  end)
+M.rename = function()
+  vim.notify_once(
+    "[inc_rename] The rename function has been removed, you no longer need to call it. Please check the readme for details.",
+    vim.lsp.log_levels.WARN
+  )
 end
 
 local create_user_command = function(cmd_name)
@@ -284,16 +325,16 @@ M.setup = function(user_config)
   end
 
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
+  if M.config.input_buffer_type == "dressing" then
+    M.config.input_buffer = dressing_config
+  end
 
-  local id = vim.api.nvim_create_augroup("inc_rename.nvim", { clear = true })
+  local group = vim.api.nvim_create_augroup("inc_rename.nvim", { clear = true })
   -- We need to be able to tell when the command was cancelled to refetch the references.
   -- Otherwise the same variable would be renamed every time.
   vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
-    group = id,
-    callback = function()
-      state.cached_lines = nil
-      state.should_fetch_references = true
-    end,
+    group = group,
+    callback = tear_down,
   })
   create_user_command(M.config.cmd_name)
 end
