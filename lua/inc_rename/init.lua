@@ -19,6 +19,17 @@ local function set_error(msg, level)
   state.cached_lines = nil
 end
 
+local function buf_is_visible(bufnr)
+  if vim.api.nvim_buf_is_loaded(bufnr) then
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if vim.api.nvim_win_get_buf(win) == bufnr then
+        return true
+      end
+    end
+  end
+  return false
+end
+
 local function cache_lines(result)
   local cached_lines = {}
   for _, res in ipairs(result) do
@@ -26,8 +37,7 @@ local function cache_lines(result)
     -- E.g. sumneko_lua sends ranges across multiple lines when a table value is a function, skip this range
     if range.start.line == range["end"].line then
       local bufnr = vim.uri_to_bufnr(res.uri)
-      -- Only need to highlight loaded buffers
-      if vim.api.nvim_buf_is_loaded(bufnr) then
+      if buf_is_visible(bufnr) then
         if not cached_lines[bufnr] then
           cached_lines[bufnr] = {}
         end
