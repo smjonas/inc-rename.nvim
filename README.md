@@ -38,26 +38,18 @@ end, { expr = true })
 <details>
 <summary>&#127800; <code>dressing.nvim</code> support</summary>
 
-</br>If your are using [dressing.nvim](https://github.com/stevearc/dressing.nvim)
-or a similar plugin that uses a separate buffer for typing the new name,
-you can call the `rename` function that `inc-rename` provides:
+</br>If you are using [dressing.nvim](https://github.com/stevearc/dressing.nvim),
+set the `input_buffer_type` option to `"dressing"`:
 ```lua
-require("inc_rename").rename(opts | nil)
-
--- To prefill the word under the cursor, pass a default value:
-require("inc_rename").rename({ default = vim.fn.expand("<cword>") })
+require("inc_rename").setup {
+  input_buffer_type = "dressing",
+}
 ```
-
-This function calls `vim.ui.input()` with the optional default input (which `dressing.nvim` hijacks)
-and manages the highlighting in a more manual way (that means highlighting does not rely on Neovim's
-command-preview feature).
-> :warning: Note that highlighting will not work with the builtin `vim.ui.input` function
-> because it is currently not possible to modify the buffer while the user is still typing
-> in the command line.
+Then simply type the `:IncRename` command and the new name you enter will automatically be updated in the input buffer as you type.
 
 The result should look something like this:
 <div align="center">
-<img src="https://user-images.githubusercontent.com/40792180/175773326-df2b6f92-9865-4fea-a08b-cbe89e5dd1b0.png">
+<img src="https://user-images.githubusercontent.com/40792180/188309667-0d7e8086-ae48-4a25-8b01-df11d229b8c6.png">
 </div>
 </br>
 
@@ -87,6 +79,7 @@ require("inc_rename").setup {
   hl_group = "Substitute", -- the highlight group used for highlighting the identifier's new name
   preview_empty_name = false, -- whether an empty new name should be previewed; if false the command preview will be cancelled instead
   show_message = true, -- whether to display a `Renamed m instances in n files` message after a rename operation
+  input_buffer_type = nil, -- the type of the external input buffer to use (the only supported value is currently "dressing")
   post_hook = nil, -- callback to run after renaming, receives the result table (from LSP handler) as an argument
 }
 ```
