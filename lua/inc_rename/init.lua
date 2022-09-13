@@ -2,6 +2,7 @@ local M = {}
 
 M.default_config = {
   cmd_name = "IncRename",
+  async = true,
   hl_group = "Substitute",
   preview_empty_name = false,
   show_message = true,
@@ -91,6 +92,18 @@ local function filter_duplicates(cached_lines)
   return cached_lines
 end
 
+local handle_references_result = function(result, err)
+  if err then
+    set_error("[inc-rename] Error while finding references: " .. err, vim.lsp.log_levels.ERROR)
+    return
+  end
+  if not result or vim.tbl_isempty(result) then
+    set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
+    return
+  end
+  state.cached_lines = filter_duplicates(cache_lines(result))
+end
+
 -- Get positions of LSP reference symbols
 local function fetch_lsp_references(bufnr, lsp_params)
   local clients = vim.lsp.get_active_clients {
@@ -107,17 +120,15 @@ local function fetch_lsp_references(bufnr, lsp_params)
 
   local params = lsp_params or vim.lsp.util.make_position_params()
   params.context = { includeDeclaration = true }
-  vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, _, _)
-    if err then
-      set_error("[inc-rename] Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
-      return
-    end
-    if not result or vim.tbl_isempty(result) then
-      set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
-      return
-    end
-    state.cached_lines = filter_duplicates(cache_lines(result))
-  end)
+  if M.config.async then
+    vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, _, _)
+      handle_references_result(result, err and err.message)
+    end)
+  else
+    local result, err = vim.lsp.buf_request_sync(bufnr, "textDocument/references", params)
+    local client_ids = vim.lsp.get_active_clients { bufnr = bufnr }
+    handle_references_result(result and result[client_ids[1].id].result, err)
+  end
 end
 
 local function tear_down(switch_buffer)
@@ -167,7 +178,11 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     state.err = nil
     fetch_lsp_references(opts.bufnr or cur_buf, opts.lsp_params)
 
-    if M.config.input_buffer ~= nil then
+    if state.err then
+      -- Leave command line mode
+      local enter = vim.api.nvim_replace_termcodes("<cr>", true, false, true)
+      vim.api.nvim_feedkeys(enter, "n", false)
+    elseif M.config.input_buffer ~= nil then
       initialize_input_buffer(opts.args)
     end
   end

@@ -76,6 +76,7 @@ The default options are:
 ```lua
 require("inc_rename").setup {
   cmd_name = "IncRename", -- the name of the command
+  async = true, -- if false, the request to fetch references will be sent asynchronously to the LSP server. This may cause lag but the highlighting will be shown immediately on the first keypress. See also issue #20.
   hl_group = "Substitute", -- the highlight group used for highlighting the identifier's new name
   preview_empty_name = false, -- whether an empty new name should be previewed; if false the command preview will be cancelled instead
   show_message = true, -- whether to display a `Renamed m instances in n files` message after a rename operation
