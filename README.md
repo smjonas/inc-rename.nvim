@@ -8,7 +8,7 @@ feedback thanks to Neovim's command preview feature.
 </div>
 
 ## Installation
-**This plugin requires Neovim's nightly version (0.8).**
+**This plugin requires Neovim 0.8**
 
 Install using your favorite package manager and call the `setup` function.
 Here is an example using packer.nvim:
@@ -28,7 +28,7 @@ enter the new name:
 ```lua
 vim.keymap.set("n", "<leader>rn", ":IncRename ")
 ```
-If you want to prefill the word under the cursor you can use the following:
+If you want to fill in the word under the cursor you can use the following:
 ```lua
 vim.keymap.set("n", "<leader>rn", function()
   return ":IncRename " .. vim.fn.expand("<cword>")

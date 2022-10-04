@@ -318,7 +318,7 @@ end
 M.setup = function(user_config)
   if vim.fn.has("nvim-0.8.0") ~= 1 then
     vim.notify(
-      "[inc_rename] This plugin requires Neovim nightly (0.8). Please upgrade your Neovim version.",
+      "[inc_rename] This plugin requires at least Neovim 0.8. Please upgrade your Neovim version.",
       vim.lsp.log_levels.ERROR
     )
     return
