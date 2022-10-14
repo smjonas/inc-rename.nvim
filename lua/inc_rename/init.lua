@@ -23,6 +23,7 @@ local state = {
   input_bufnr = nil,
   err = nil,
 }
+local backspace = vim.api.nvim_replace_termcodes("<bs>", true, false, true)
 
 local function set_error(msg, level)
   state.err = { msg = msg, level = level }
@@ -117,6 +118,8 @@ local function fetch_lsp_references(bufnr, lsp_params)
       return
     end
     state.cached_lines = filter_duplicates(cache_lines(result))
+    -- Hack to trigger command preview again now that results have arrived
+    vim.api.nvim_feedkeys("a" .. backspace, "n", false)
   end)
 end
 
