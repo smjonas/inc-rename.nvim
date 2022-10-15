@@ -119,7 +119,9 @@ local function fetch_lsp_references(bufnr, lsp_params)
     end
     state.cached_lines = filter_duplicates(cache_lines(result))
     -- Hack to trigger command preview again now that results have arrived
-    vim.api.nvim_feedkeys("a" .. backspace, "n", false)
+    if vim.api.nvim_get_mode().mode == "c" then
+      vim.api.nvim_feedkeys("a" .. backspace, "n", false)
+    end
   end)
 end
 
