@@ -42,27 +42,28 @@ local function buf_is_visible(bufnr)
 end
 
 local function cache_lines(result)
-  local cached_lines = {}
+  local cached_lines = vim.defaulttable()
   for _, res in ipairs(result) do
     local range = res.range
     -- E.g. sumneko_lua sends ranges across multiple lines when a table value is a function, skip this range
     if range.start.line == range["end"].line then
       local bufnr = vim.uri_to_bufnr(res.uri)
-      if buf_is_visible(bufnr) then
-        if not cached_lines[bufnr] then
-          cached_lines[bufnr] = {}
-        end
+      local is_visible = buf_is_visible(bufnr)
+      local line_nr = range.start.line
+      -- Make sure buffer is loaded before retrieving the line
+      if not vim.api.nvim_buf_is_loaded(bufnr) then
+        vim.fn.bufload(bufnr)
+      end
+      local line = vim.api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
+      local start_col, end_col = range.start.character, range["end"].character
+      local line_info =
+        { text = line, start_col = start_col, end_col = end_col, bufnr = bufnr, is_visible = is_visible }
 
-        local line_nr = range.start.line
-        local line = vim.api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
-        local start_col, end_col = range.start.character, range["end"].character
-        local line_info = { text = line, start_col = start_col, end_col = end_col }
-        -- Same line was already seen
-        if cached_lines[bufnr][line_nr] then
-          table.insert(cached_lines[bufnr][line_nr], line_info)
-        else
-          cached_lines[bufnr][line_nr] = { line_info }
-        end
+      -- Same line was already seen
+      if cached_lines[bufnr][line_nr] then
+        table.insert(cached_lines[bufnr][line_nr], line_info)
+      else
+        cached_lines[bufnr][line_nr] = { line_info }
       end
     end
   end
@@ -150,6 +151,56 @@ local function initialize_input_buffer(default)
   end
 end
 
+local function populate_preview_buf(preview_buf, buf_infos, preview_ns)
+  local cur_line = 0
+  local sorted_buf_infos = {}
+  for filename, infos in pairs(buf_infos) do
+    infos.filename = filename
+    infos.count = 0
+    for _, info in ipairs(infos) do
+      -- Simply using #infos as the count would not consider multiple instances per line
+      infos.count = infos.count + #info.hl_positions
+    end
+    table.insert(sorted_buf_infos, infos)
+  end
+
+  -- Sort by number of lines changed, then by filename
+  table.sort(sorted_buf_infos, function(a, b)
+    if a.count == b.count then
+      return a.filename < b.filename
+    end
+    return a.count < b.count
+  end)
+
+  for _, infos in ipairs(sorted_buf_infos) do
+    local filename_info = ("%s (%d instance%s):"):format(infos.filename, infos.count, infos.count == 1 and "" or "s")
+    vim.api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { filename_info })
+    vim.api.nvim_buf_add_highlight(preview_buf, preview_ns, "Comment", cur_line, 0, -1)
+    cur_line = cur_line + 1
+
+    -- Sort by line number
+    table.sort(infos, function(a, b)
+      return a.line_nr < b.line_nr
+    end)
+
+    for _, info in ipairs(infos) do
+      local prefix = ("|%d| "):format(info.line_nr + 1)
+      vim.api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { prefix .. info.updated_line })
+      for _, hl_pos in ipairs(info.hl_positions) do
+        vim.api.nvim_buf_add_highlight(
+          preview_buf,
+          preview_ns,
+          M.config.hl_group,
+          cur_line,
+          hl_pos.start_col + #prefix,
+          hl_pos.end_col + #prefix
+        )
+      end
+      cur_line = cur_line + 1
+    end
+  end
+end
+
 -- Called when the user is still typing the command or the command arguments
 local function incremental_rename_preview(opts, preview_ns, preview_buf)
   local new_name = opts.args
@@ -189,30 +240,39 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     return M.config.input_buffer ~= nil and 2
   end
 
+  -- Only used when preview_buf is not nil
+  local preview_buf_infos = vim.defaulttable()
+
   local function apply_highlights_fn(bufnr, line_nr, line_info)
     local offset = 0
     local updated_line = line_info[1].text
-    local highlight_positions = {}
+    local hl_positions = {}
 
     for _, info in ipairs(line_info) do
-      updated_line = updated_line:sub(1, info.start_col + offset)
-        .. new_name
-        .. updated_line:sub(info.end_col + 1 + offset)
+      if preview_buf or info.is_visible then
+        updated_line = updated_line:sub(1, info.start_col + offset)
+          .. new_name
+          .. updated_line:sub(info.end_col + 1 + offset)
 
-      table.insert(highlight_positions, {
-        start_col = info.start_col + offset,
-        end_col = info.start_col + #new_name + offset,
-      })
-      -- Offset by the length difference between the new and old names
-      offset = offset + #new_name - (info.end_col - info.start_col)
+        table.insert(hl_positions, {
+          start_col = info.start_col + offset,
+          end_col = info.start_col + #new_name + offset,
+        })
+        -- Offset by the length difference between the new and old names
+        offset = offset + #new_name - (info.end_col - info.start_col)
+      end
     end
 
     vim.api.nvim_buf_set_lines(bufnr or opts.bufnr, line_nr, line_nr + 1, false, { updated_line })
     if preview_buf then
-      vim.api.nvim_buf_set_lines(preview_buf, line_nr, line_nr + 1, false, { updated_line })
+      -- Group by filename
+      table.insert(
+        preview_buf_infos[vim.api.nvim_buf_get_name(line_info[1].bufnr)],
+        { updated_line = updated_line, line_nr = line_nr, hl_positions = hl_positions }
+      )
     end
 
-    for _, hl_pos in ipairs(highlight_positions) do
+    for _, hl_pos in ipairs(hl_positions) do
       vim.api.nvim_buf_add_highlight(
         bufnr or opts.bufnr,
         preview_ns,
@@ -238,6 +298,10 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     for line_nr, line_info in pairs(line_info_per_bufnr) do
       apply_highlights_fn(bufnr, line_nr, line_info)
     end
+  end
+
+  if preview_buf then
+    populate_preview_buf(preview_buf, preview_buf_infos, preview_ns)
   end
 
   state.preview_ns = preview_ns
@@ -309,7 +373,7 @@ end
 
 M.rename = function()
   vim.notify_once(
-    "[inc_rename] The rename function has been removed, you no longer need to call it. Please check the readme for details.",
+    "[inc-rename] The rename function has been removed, you no longer need to call it. Please check the readme for details.",
     vim.lsp.log_levels.WARN
   )
 end
@@ -321,9 +385,11 @@ local create_user_command = function(cmd_name)
 end
 
 M.setup = function(user_config)
-  if vim.fn.has("nvim-0.8.0") ~= 1 then
+  -- vim.defaulttable has been added after the command preview feature
+  -- so make sure the current 0.8 version is recent enough
+  if vim.fn.has("nvim-0.8.0") ~= 1 or not vim.defaulttable then
     vim.notify(
-      "[inc_rename] This plugin requires at least Neovim 0.8. Please upgrade your Neovim version.",
+      "[inc-rename] This plugin requires at least Neovim 0.8 (stable). Please upgrade your Neovim version.",
       vim.lsp.log_levels.ERROR
     )
     return
@@ -334,7 +400,7 @@ M.setup = function(user_config)
     M.config.input_buffer = dressing_config
   end
 
-  local group = vim.api.nvim_create_augroup("inc_rename.nvim", { clear = true })
+  local group = vim.api.nvim_create_augroup("inc-rename.nvim", { clear = true })
   -- We need to be able to tell when the command was cancelled to refetch the references.
   -- Otherwise the same variable would be renamed every time.
   vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
