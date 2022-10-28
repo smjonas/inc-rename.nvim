@@ -38,28 +38,13 @@ end, { expr = true })
 <details>
 <summary>💥 <code>noice.nvim</code> support</summary>
 
-</br>If you are using [noice.nvim](https://github.com/folke/noice.nvim), add the following
-to your `noice` setup:
+</br>If you are using [noice.nvim](https://github.com/folke/noice.nvim), you can enable the `inc_rename` preset like this:
+
 ```lua
 require("noice").setup {
-  cmdline = {
-    format = {
-      IncRename = {
-        pattern = "^:%s*IncRename%s+",
-        icon = " ",
-        conceal = true,
-        opts = {
-          relative = "cursor",
-          size = { min_width = 20, },
-          position = { row = -3, col = 0, },
-          buf_options = { filetype = "text" },
-        },
-      },
-    },
-  },
+  presets = { inc_rename = true }
 }
 ```
-If you prefer a fixed-size, centered input box take a look at this alternative configuration [here](https://github.com/folke/noice.nvim/issues/84#issuecomment-1285724444).
 
 Then simply type the `:IncRename` command (or use the keymap mentioned above).
 <div align="center">
