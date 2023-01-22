@@ -250,10 +250,8 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
 
     for _, info in ipairs(line_info) do
       if preview_buf or info.is_visible then
-        updated_line = updated_line:sub(1, info.start_col + offset)
-          .. new_name
-          .. updated_line:sub(info.end_col + 1 + offset)
-
+        -- Use nvim_buf_set_text instead of nvim_buf_set_lines to preserve ext-marks
+        vim.api.nvim_buf_set_text(0, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
         table.insert(hl_positions, {
           start_col = info.start_col + offset,
           end_col = info.start_col + #new_name + offset,
@@ -263,7 +261,6 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
       end
     end
 
-    vim.api.nvim_buf_set_lines(bufnr or opts.bufnr, line_nr, line_nr + 1, false, { updated_line })
     if preview_buf then
       -- Group by filename
       table.insert(
