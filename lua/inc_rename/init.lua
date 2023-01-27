@@ -118,6 +118,7 @@ local function fetch_lsp_references(bufnr, lsp_params)
       set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
       return
     end
+    vim.pretty_print(result)
     state.cached_lines = filter_duplicates(cache_lines(result))
     -- Hack to trigger command preview again now that results have arrived
     if vim.api.nvim_get_mode().mode == "c" then
