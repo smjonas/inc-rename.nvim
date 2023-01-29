@@ -1,5 +1,4 @@
 local M = {}
-
 M.default_config = {
   cmd_name = "IncRename",
   hl_group = "Substitute",
@@ -93,6 +92,18 @@ local function filter_duplicates(cached_lines)
   return cached_lines
 end
 
+-- The phpactor LSP server (possibly others) responds with incorrect ranges, fix this here.
+local function fix_invalid_ranges(result, cur_word)
+  for _, res in ipairs(result) do
+    local range = res.range
+    if range.start.line == range["end"].line and range.start.character == range["end"].character then
+      -- Estimate the length of the identifier using the word under the cursor
+      range["end"].character = range.start.character + #cur_word - 1
+    end
+  end
+  return result
+end
+
 -- Get positions of LSP reference symbols
 local function fetch_lsp_references(bufnr, lsp_params)
   local clients = vim.lsp.get_active_clients {
@@ -107,6 +118,7 @@ local function fetch_lsp_references(bufnr, lsp_params)
     return
   end
 
+  local cur_word = vim.fn.expand("<cword>")
   local params = lsp_params or vim.lsp.util.make_position_params()
   params.context = { includeDeclaration = true }
   vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, _, _)
@@ -118,7 +130,8 @@ local function fetch_lsp_references(bufnr, lsp_params)
       set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
       return
     end
-    vim.pretty_print(result)
+    result = fix_invalid_ranges(result, cur_word)
+
     state.cached_lines = filter_duplicates(cache_lines(result))
     -- Hack to trigger command preview again now that results have arrived
     if vim.api.nvim_get_mode().mode == "c" then
