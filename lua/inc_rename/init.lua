@@ -251,7 +251,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     for _, info in ipairs(line_info) do
       if preview_buf or info.is_visible then
         -- Use nvim_buf_set_text instead of nvim_buf_set_lines to preserve ext-marks
-        vim.api.nvim_buf_set_text(0, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
+        vim.api.nvim_buf_set_text(bufnr, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
         table.insert(hl_positions, {
           start_col = info.start_col + offset,
           end_col = info.start_col + #new_name + offset,
