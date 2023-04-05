@@ -24,6 +24,7 @@ local state = {
   err = nil,
 }
 local backspace = vim.api.nvim_replace_termcodes("<bs>", true, false, true)
+local escape = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
 
 local function set_error(msg, level)
   state.err = { msg = msg, level = level }
@@ -116,6 +117,8 @@ local function fetch_lsp_references(bufnr, lsp_params)
     end
     if not result or vim.tbl_isempty(result) then
       set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
+      -- Leave command line mode when there is nothing to rename
+      vim.api.nvim_feedkeys(escape, "n", false)
       return
     end
     state.cached_lines = filter_duplicates(cache_lines(result))
