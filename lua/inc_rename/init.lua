@@ -136,7 +136,8 @@ local function tear_down(switch_buffer)
     M.config.input_buffer.close_window()
     state.input_win_id = nil
     if switch_buffer then
-      vim.api.nvim_set_current_win(state.win_id)
+      -- May fail (e.g. in command line window)
+      pcall(vim.api.nvim_set_current_win, state.win_id)
     end
   end
 end
@@ -150,6 +151,7 @@ local function initialize_input_buffer(default)
     if vim.bo[bufnr].filetype == M.config.input_buffer.filetype then
       state.input_win_id = win_id
       state.input_bufnr = bufnr
+      return
     end
   end
 end
