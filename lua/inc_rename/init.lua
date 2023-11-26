@@ -397,6 +397,14 @@ M.setup = function(user_config)
     return
   end
 
+  if vim.g.loaded_traces_plugin == 1 then
+    vim.notify(
+      "[inc-rename] This plugin is incompatible with traces.vim. Please uninstall one of them to proceed.",
+      vim.log.levels.ERROR
+    )
+    return
+  end
+
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
   if M.config.input_buffer_type == "dressing" then
     M.config.input_buffer = dressing_config
