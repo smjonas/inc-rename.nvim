@@ -8,10 +8,25 @@ feedback thanks to Neovim's command preview feature.
 </div>
 
 ## Installation
-**This plugin requires Neovim 0.8**
+**This plugin requires at least Neovim 0.8**
 
 Install using your favorite package manager and call the `setup` function.
-Here is an example using packer.nvim:
+<details>
+    <summary>lazy.nvim</summary>
+
+```lua
+{
+  "smjonas/inc-rename.nvim",
+  config = function()
+    require("inc_rename").setup()
+  end,
+}
+```
+</details>
+
+<details>
+    <summary>packer.nvim</summary>
+
 ```lua
 use {
   "smjonas/inc-rename.nvim",
@@ -20,6 +35,19 @@ use {
   end,
 }
 ```
+</details>
+
+<details>
+    <summary>vim-plug</summary>
+
+```vim
+Plug "smjonas/inc-rename.nvim"
+```
+Somewhere in your init.lua, you will need to call the setup function:
+```lua
+require("inc_rename").setup()
+```
+</details>
 
 ## Usage
 Simply type `:IncRename <new_name>` while your cursor is on an LSP identifier.
@@ -88,6 +116,13 @@ require("dressing").setup {
 ```
 
 </details>
+
+## Known issues
+There have been reports of `inc-rename` not working with certain plugins and language servers:
+- `traces.vim` (see [issue #35](https://github.com/smjonas/inc-rename.nvim/issues/35))
+- `custom-elements-languageserver` (see [issue #44](https://github.com/smjonas/inc-rename.nvim/issues/44))
+
+Make sure to uninstall these if you are experiencing issues.
 
 ## Customization
 You can override the default settings by passing a Lua table to the `setup` function.
