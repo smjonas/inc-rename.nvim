@@ -249,6 +249,11 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   local preview_buf_infos = vim.defaulttable()
 
   local function apply_highlights_fn(bufnr, line_nr, line_info)
+    -- rust-analyzer does not return references in ascending
+    -- order for a given line number, so sort it (#47)
+    table.sort(line_info, function(a, b)
+      return a.start_col < b.start_col
+    end)
     local offset = 0
     local updated_line = line_info[1].text
     local hl_positions = {}
