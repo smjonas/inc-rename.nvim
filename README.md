@@ -41,7 +41,7 @@ use {
     <summary>vim-plug</summary>
 
 ```vim
-Plug "smjonas/inc-rename.nvim"
+Plug 'smjonas/inc-rename.nvim'
 ```
 Somewhere in your init.lua, you will need to call the setup function:
 ```lua
