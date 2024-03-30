@@ -215,6 +215,19 @@ local function populate_preview_buf(preview_buf, buf_infos, preview_ns)
   end
 end
 
+---@param new_name string
+---@param input_bufnr number
+---@param preview_ns number
+---@param cmd_name string
+local function update_input_buffer(new_name, input_bufnr, preview_ns, cmd_name)
+  -- Add a space so the cursor can be placed after the last character
+  vim.api.nvim_buf_set_lines(input_bufnr, 0, -1, false, { new_name .. " " })
+  local _, cmd_prefix_len = vim.fn.getcmdline():find("^%s*" .. cmd_name .. "%s*")
+  local cursor_pos = vim.fn.getcmdpos() - cmd_prefix_len - 1
+  -- Create a fake cursor in the input buffer
+  vim.api.nvim_buf_add_highlight(input_bufnr, preview_ns, "Cursor", 0, cursor_pos, cursor_pos + 1)
+end
+
 -- Called when the user is still typing the command or the command arguments
 local function incremental_rename_preview(opts, preview_ns, preview_buf)
   local new_name = opts.args
@@ -222,12 +235,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   vim.v.errmsg = ""
 
   if state.input_win_id and vim.api.nvim_win_is_valid(state.input_win_id) then
-    -- Add a space so the cursor can be placed after the last character
-    vim.api.nvim_buf_set_lines(state.input_bufnr, 0, -1, false, { new_name .. " " })
-    local _, cmd_prefix_len = vim.fn.getcmdline():find("^%s*" .. M.config.cmd_name .. "%s*")
-    local cursor_pos = vim.fn.getcmdpos() - cmd_prefix_len - 1
-    -- Create a fake cursor in the input buffer
-    vim.api.nvim_buf_add_highlight(state.input_bufnr, preview_ns, "Cursor", 0, cursor_pos, cursor_pos + 1)
+    update_input_buffer(new_name, state.input_bufnr, preview_ns, M.config.cmd_name)
   end
 
   -- Store the lines of the buffer at the first invocation.
@@ -324,6 +332,26 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   return 2
 end
 
+local function show_success_message(result)
+  local changed_instances = 0
+  local changed_files = 0
+
+  local with_edits = result.documentChanges ~= nil
+  for _, change in pairs(result.documentChanges or result.changes) do
+    changed_instances = changed_instances + (with_edits and #change.edits or #change)
+    changed_files = changed_files + 1
+  end
+
+  local message = string.format(
+    "Renamed %s instance%s in %s file%s",
+    changed_instances,
+    changed_instances == 1 and "" or "s",
+    changed_files,
+    changed_files == 1 and "" or "s"
+  )
+  vim.notify(message)
+end
+
 -- Sends a LSP rename request and optionally displays a message to the user showing
 -- how many instances were renamed in how many files
 local function perform_lsp_rename(new_name)
@@ -345,23 +373,7 @@ local function perform_lsp_rename(new_name)
     vim.lsp.util.apply_workspace_edit(result, client.offset_encoding)
 
     if M.config.show_message then
-      local changed_instances = 0
-      local changed_files = 0
-
-      local with_edits = result.documentChanges ~= nil
-      for _, change in pairs(result.documentChanges or result.changes) do
-        changed_instances = changed_instances + (with_edits and #change.edits or #change)
-        changed_files = changed_files + 1
-      end
-
-      local message = string.format(
-        "Renamed %s instance%s in %s file%s",
-        changed_instances,
-        changed_instances == 1 and "" or "s",
-        changed_files,
-        changed_files == 1 and "" or "s"
-      )
-      vim.notify(message)
+      show_success_message(result)
     end
     if M.config.post_hook then
       M.config.post_hook(result)
