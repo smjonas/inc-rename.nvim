@@ -94,15 +94,24 @@ local function filter_duplicates(cached_lines)
   return cached_lines
 end
 
--- Get positions of LSP reference symbols
-local function fetch_lsp_references(bufnr, lsp_params)
-  local clients = vim.lsp.get_active_clients {
-    bufnr = bufnr,
-  }
+local function get_clients(bufnr)
+  local opts = { bufnr = bufnr }
+  local clients = {}
+  if vim.lsp.get_clients then
+    clients = vim.lsp.get_clients(opts)
+  else
+    ---@diagnostic disable-next-line: deprecated
+    clients = vim.lsp.get_active_clients(opts)
+  end
   clients = vim.tbl_filter(function(client)
     return client.supports_method("textDocument/rename")
   end, clients)
+  return clients
+end
 
+-- Get positions of LSP reference symbols
+local function fetch_lsp_references(bufnr, lsp_params)
+  local clients = get_clients(bufnr)
   if #clients == 0 then
     set_error("[inc-rename] No active language server with rename capability")
     return
