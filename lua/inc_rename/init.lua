@@ -2,6 +2,34 @@ local M = {}
 
 local api = vim.api
 
+---@class inc_rename.LineInfo
+---@field text string
+---@field start_col integer
+---@field end_col integer
+---@field bufnr number
+---@field is_visible boolean
+
+---@class inc_rename.State
+---@field should_fetch_references boolean
+---@field cached_line_infos_per_bufnr table<integer, inc_rename.LineInfo[]>?
+---@field win_id integer?
+---@field input_win_id integer?
+---@field input_bufnr integer?
+---@field preview_ns integer?
+---@field err table?
+
+---@class inc_rename.UserConfig
+---@field cmd_name string
+---@field hl_group string
+---@field preview_empty_name boolean
+---@field show_message boolean
+---@field input_buffer_type "dressing"?
+---@field post_hook fun(result: any)?
+
+---@class inc_rename.PluginConfig : inc_rename.UserConfig
+---@field input_buffer_config table
+
+---@type inc_rename.UserConfig
 M.default_config = {
   cmd_name = "IncRename",
   hl_group = "Substitute",
@@ -18,21 +46,28 @@ local dressing_config = {
   end,
 }
 
+---@type inc_rename.State
 local state = {
   should_fetch_references = true,
-  cached_lines = nil,
+  cached_line_infos_per_bufnr = nil,
+  win_id = nil,
   input_win_id = nil,
   input_bufnr = nil,
-  err = nil,
+  preview_ns = nil,
 }
+
 local backspace = api.nvim_replace_termcodes("<bs>", true, false, true)
 local escape = api.nvim_replace_termcodes("<esc>", true, false, true)
 
+---@param msg string
+---@param level number
 local function set_error(msg, level)
   state.err = { msg = msg, level = level }
-  state.cached_lines = nil
+  state.cached_line_infos_per_bufnr = nil
 end
 
+---@param bufnr number
+---@return boolean
 local function buf_is_visible(bufnr)
   if api.nvim_buf_is_loaded(bufnr) then
     for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
@@ -59,6 +94,7 @@ local function cache_lines(result)
       end
       local line = api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
       local start_col, end_col = range.start.character, range["end"].character
+      ---@type inc_rename.LineInfo
       local line_info =
         { text = line, start_col = start_col, end_col = end_col, bufnr = bufnr, is_visible = is_visible }
 
@@ -77,6 +113,7 @@ end
 -- filter out these duplicates to avoid highlighting issues.
 local function filter_duplicates(cached_lines)
   for buf, line_info_per_bufnr in pairs(cached_lines) do
+    ---@param line_info inc_rename.LineInfo[]
     for line_nr, line_info in pairs(line_info_per_bufnr) do
       local len = #line_info
       if len > 1 then
@@ -96,6 +133,8 @@ local function filter_duplicates(cached_lines)
   return cached_lines
 end
 
+---@param bufnr integer
+---@return lsp.Client[]
 local function get_clients(bufnr)
   local opts = { bufnr = bufnr }
   local clients = {}
@@ -112,10 +151,12 @@ local function get_clients(bufnr)
 end
 
 -- Get positions of LSP reference symbols
+---@param bufnr number
+---@param lsp_params table
 local function fetch_lsp_references(bufnr, lsp_params)
   local clients = get_clients(bufnr)
   if #clients == 0 then
-    set_error("[inc-rename] No active language server with rename capability")
+    set_error("[inc-rename] No active language server with rename capability", vim.lsp.log_levels.WARN)
     return
   end
 
@@ -132,7 +173,7 @@ local function fetch_lsp_references(bufnr, lsp_params)
       api.nvim_feedkeys(escape, "n", false)
       return
     end
-    state.cached_lines = filter_duplicates(cache_lines(result))
+    state.cached_line_infos_per_bufnr = filter_duplicates(cache_lines(result))
     -- Hack to trigger command preview again now that results have arrived
     if api.nvim_get_mode().mode == "c" then
       api.nvim_feedkeys("a" .. backspace, "n", false)
@@ -141,10 +182,10 @@ local function fetch_lsp_references(bufnr, lsp_params)
 end
 
 local function tear_down(switch_buffer)
-  state.cached_lines = nil
+  state.cached_line_infos_per_bufnr = nil
   state.should_fetch_references = true
   if state.input_win_id and api.nvim_win_is_valid(state.input_win_id) then
-    M.config.input_buffer.close_window()
+    M.config.input_buffer_config.close_window()
     state.input_win_id = nil
     if switch_buffer then
       -- May fail (e.g. in command line window)
@@ -159,7 +200,7 @@ local function initialize_input_buffer(default)
   -- Open the input window and find the buffer and window IDs
   for _, win_id in ipairs(api.nvim_list_wins()) do
     local bufnr = api.nvim_win_get_buf(win_id)
-    if vim.bo[bufnr].filetype == M.config.input_buffer.filetype then
+    if vim.bo[bufnr].filetype == M.config.input_buffer_config.filetype then
       state.input_win_id = win_id
       state.input_bufnr = bufnr
       return
@@ -247,37 +288,40 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     state.err = nil
     fetch_lsp_references(opts.bufnr or cur_buf, opts.lsp_params)
 
-    if M.config.input_buffer ~= nil then
+    if M.config.input_buffer_config ~= nil then
       initialize_input_buffer(opts.args)
     end
   end
 
   -- Started fetching references but the results did not arrive yet
   -- (or an error occurred while fetching them).
-  if not state.cached_lines then
+  if not state.cached_line_infos_per_bufnr then
     -- Not returning 2 here somehow won't update the ui.input buffer text
-    -- when state.cached_lines is still nil
-    return M.config.input_buffer ~= nil and 2
+    -- when state.cached_line_infos_per_bufnr is still nil
+    return M.config.input_buffer_config ~= nil and 2
   end
 
   if not M.config.preview_empty_name and new_name:find("^%s*$") then
-    return M.config.input_buffer ~= nil and 2
+    return M.config.input_buffer_config ~= nil and 2
   end
 
   -- Only used when preview_buf is not nil
   local preview_buf_infos = vim.defaulttable()
 
-  local function apply_highlights_fn(bufnr, line_nr, line_info)
+  ---@param bufnr integer
+  ---@param line_nr number
+  ---@param line_infos table<inc_rename.LineInfo[]>
+  local function apply_highlights_fn(bufnr, line_nr, line_infos)
     -- rust-analyzer does not return references in ascending
     -- order for a given line number, so sort it (#47)
-    table.sort(line_info, function(a, b)
+    table.sort(line_infos, function(a, b)
       return a.start_col < b.start_col
     end)
     local offset = 0
-    local updated_line = line_info[1].text
+    local updated_line = line_infos[1].text
     local hl_positions = {}
 
-    for _, info in ipairs(line_info) do
+    for _, info in ipairs(line_infos) do
       if preview_buf or info.is_visible then
         -- Use nvim_buf_set_text instead of nvim_buf_set_lines to preserve ext-marks
         api.nvim_buf_set_text(bufnr, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
@@ -293,7 +337,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     if preview_buf then
       -- Group by filename
       table.insert(
-        preview_buf_infos[api.nvim_buf_get_name(line_info[1].bufnr)],
+        preview_buf_infos[api.nvim_buf_get_name(line_infos[1].bufnr)],
         { updated_line = updated_line, line_nr = line_nr, hl_positions = hl_positions }
       )
     end
@@ -320,17 +364,15 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     end
   end
 
-  for bufnr, line_info_per_bufnr in pairs(state.cached_lines) do
-    for line_nr, line_info in pairs(line_info_per_bufnr) do
-      apply_highlights_fn(bufnr, line_nr, line_info)
+  for bufnr, line_infos_per_bufnr in pairs(state.cached_line_infos_per_bufnr) do
+    for line_nr, line_infos in pairs(line_infos_per_bufnr) do
+      apply_highlights_fn(bufnr, line_nr, line_infos)
     end
   end
 
   if preview_buf then
     populate_preview_buf(preview_buf, preview_buf_infos, preview_ns)
   end
-
-  state.preview_ns = preview_ns
   return 2
 end
 
@@ -373,6 +415,10 @@ local function perform_lsp_rename(new_name)
     end
 
     local client = vim.lsp.get_client_by_id(ctx.client_id)
+    if not client then
+      vim.notify("[inc-rename] Error while renaming (invalid client ID)", vim.lsp.log_levels.ERROR)
+      return
+    end
     vim.lsp.util.apply_workspace_edit(result, client.offset_encoding)
 
     if M.config.show_message then
@@ -422,6 +468,7 @@ local create_user_command = function(cmd_name)
   end, { nargs = 1, addr = "lines", preview = incremental_rename_preview })
 end
 
+---@param user_config inc_rename.UserConfig
 M.setup = function(user_config)
   -- vim.defaulttable has been added after the command preview feature
   -- so make sure the current 0.8 version is recent enough
@@ -441,9 +488,11 @@ M.setup = function(user_config)
     return
   end
 
+  ---@type inc_rename.PluginConfig
+  ---@diagnostic disable-next-line: assign-type-mismatch
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
   if M.config.input_buffer_type == "dressing" then
-    M.config.input_buffer = dressing_config
+    M.config.input_buffer_config = dressing_config
   end
 
   local group = api.nvim_create_augroup("inc-rename.nvim", { clear = true })
