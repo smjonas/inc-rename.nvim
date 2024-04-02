@@ -1,5 +1,7 @@
 local M = {}
 
+local api = vim.api
+
 M.default_config = {
   cmd_name = "IncRename",
   hl_group = "Substitute",
@@ -23,8 +25,8 @@ local state = {
   input_bufnr = nil,
   err = nil,
 }
-local backspace = vim.api.nvim_replace_termcodes("<bs>", true, false, true)
-local escape = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
+local backspace = api.nvim_replace_termcodes("<bs>", true, false, true)
+local escape = api.nvim_replace_termcodes("<esc>", true, false, true)
 
 local function set_error(msg, level)
   state.err = { msg = msg, level = level }
@@ -32,9 +34,9 @@ local function set_error(msg, level)
 end
 
 local function buf_is_visible(bufnr)
-  if vim.api.nvim_buf_is_loaded(bufnr) then
-    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-      if vim.api.nvim_win_get_buf(win) == bufnr then
+  if api.nvim_buf_is_loaded(bufnr) then
+    for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+      if api.nvim_win_get_buf(win) == bufnr then
         return true
       end
     end
@@ -52,10 +54,10 @@ local function cache_lines(result)
       local is_visible = buf_is_visible(bufnr)
       local line_nr = range.start.line
       -- Make sure buffer is loaded before retrieving the line
-      if not vim.api.nvim_buf_is_loaded(bufnr) then
+      if not api.nvim_buf_is_loaded(bufnr) then
         vim.fn.bufload(bufnr)
       end
-      local line = vim.api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
+      local line = api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
       local start_col, end_col = range.start.character, range["end"].character
       local line_info =
         { text = line, start_col = start_col, end_col = end_col, bufnr = bufnr, is_visible = is_visible }
@@ -127,13 +129,13 @@ local function fetch_lsp_references(bufnr, lsp_params)
     if not result or vim.tbl_isempty(result) then
       set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
       -- Leave command line mode when there is nothing to rename
-      vim.api.nvim_feedkeys(escape, "n", false)
+      api.nvim_feedkeys(escape, "n", false)
       return
     end
     state.cached_lines = filter_duplicates(cache_lines(result))
     -- Hack to trigger command preview again now that results have arrived
-    if vim.api.nvim_get_mode().mode == "c" then
-      vim.api.nvim_feedkeys("a" .. backspace, "n", false)
+    if api.nvim_get_mode().mode == "c" then
+      api.nvim_feedkeys("a" .. backspace, "n", false)
     end
   end)
 end
@@ -141,22 +143,22 @@ end
 local function tear_down(switch_buffer)
   state.cached_lines = nil
   state.should_fetch_references = true
-  if state.input_win_id and vim.api.nvim_win_is_valid(state.input_win_id) then
+  if state.input_win_id and api.nvim_win_is_valid(state.input_win_id) then
     M.config.input_buffer.close_window()
     state.input_win_id = nil
     if switch_buffer then
       -- May fail (e.g. in command line window)
-      pcall(vim.api.nvim_set_current_win, state.win_id)
+      pcall(api.nvim_set_current_win, state.win_id)
     end
   end
 end
 
 local function initialize_input_buffer(default)
-  state.win_id = vim.api.nvim_get_current_win()
+  state.win_id = api.nvim_get_current_win()
   vim.ui.input({ default = default }, function() end)
   -- Open the input window and find the buffer and window IDs
-  for _, win_id in ipairs(vim.api.nvim_list_wins()) do
-    local bufnr = vim.api.nvim_win_get_buf(win_id)
+  for _, win_id in ipairs(api.nvim_list_wins()) do
+    local bufnr = api.nvim_win_get_buf(win_id)
     if vim.bo[bufnr].filetype == M.config.input_buffer.filetype then
       state.input_win_id = win_id
       state.input_bufnr = bufnr
@@ -188,8 +190,8 @@ local function populate_preview_buf(preview_buf, buf_infos, preview_ns)
 
   for _, infos in ipairs(sorted_buf_infos) do
     local filename_info = ("%s (%d instance%s):"):format(infos.filename, infos.count, infos.count == 1 and "" or "s")
-    vim.api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { filename_info })
-    vim.api.nvim_buf_add_highlight(preview_buf, preview_ns, "Comment", cur_line, 0, -1)
+    api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { filename_info })
+    api.nvim_buf_add_highlight(preview_buf, preview_ns, "Comment", cur_line, 0, -1)
     cur_line = cur_line + 1
 
     -- Sort by line number
@@ -199,9 +201,9 @@ local function populate_preview_buf(preview_buf, buf_infos, preview_ns)
 
     for _, info in ipairs(infos) do
       local prefix = ("|%d| "):format(info.line_nr + 1)
-      vim.api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { prefix .. info.updated_line })
+      api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { prefix .. info.updated_line })
       for _, hl_pos in ipairs(info.hl_positions) do
-        vim.api.nvim_buf_add_highlight(
+        api.nvim_buf_add_highlight(
           preview_buf,
           preview_ns,
           M.config.hl_group,
@@ -221,20 +223,20 @@ end
 ---@param cmd_name string
 local function update_input_buffer(new_name, input_bufnr, preview_ns, cmd_name)
   -- Add a space so the cursor can be placed after the last character
-  vim.api.nvim_buf_set_lines(input_bufnr, 0, -1, false, { new_name .. " " })
+  api.nvim_buf_set_lines(input_bufnr, 0, -1, false, { new_name .. " " })
   local _, cmd_prefix_len = vim.fn.getcmdline():find("^%s*" .. cmd_name .. "%s*")
   local cursor_pos = vim.fn.getcmdpos() - cmd_prefix_len - 1
   -- Create a fake cursor in the input buffer
-  vim.api.nvim_buf_add_highlight(input_bufnr, preview_ns, "Cursor", 0, cursor_pos, cursor_pos + 1)
+  api.nvim_buf_add_highlight(input_bufnr, preview_ns, "Cursor", 0, cursor_pos, cursor_pos + 1)
 end
 
 -- Called when the user is still typing the command or the command arguments
 local function incremental_rename_preview(opts, preview_ns, preview_buf)
   local new_name = opts.args
-  local cur_buf = vim.api.nvim_get_current_buf()
+  local cur_buf = api.nvim_get_current_buf()
   vim.v.errmsg = ""
 
-  if state.input_win_id and vim.api.nvim_win_is_valid(state.input_win_id) then
+  if state.input_win_id and api.nvim_win_is_valid(state.input_win_id) then
     update_input_buffer(new_name, state.input_bufnr, preview_ns, M.config.cmd_name)
   end
 
@@ -278,7 +280,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     for _, info in ipairs(line_info) do
       if preview_buf or info.is_visible then
         -- Use nvim_buf_set_text instead of nvim_buf_set_lines to preserve ext-marks
-        vim.api.nvim_buf_set_text(bufnr, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
+        api.nvim_buf_set_text(bufnr, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
         table.insert(hl_positions, {
           start_col = info.start_col + offset,
           end_col = info.start_col + #new_name + offset,
@@ -291,13 +293,13 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     if preview_buf then
       -- Group by filename
       table.insert(
-        preview_buf_infos[vim.api.nvim_buf_get_name(line_info[1].bufnr)],
+        preview_buf_infos[api.nvim_buf_get_name(line_info[1].bufnr)],
         { updated_line = updated_line, line_nr = line_nr, hl_positions = hl_positions }
       )
     end
 
     for _, hl_pos in ipairs(hl_positions) do
-      vim.api.nvim_buf_add_highlight(
+      api.nvim_buf_add_highlight(
         bufnr or opts.bufnr,
         preview_ns,
         M.config.hl_group,
@@ -306,7 +308,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
         hl_pos.end_col
       )
       if preview_buf then
-        vim.api.nvim_buf_add_highlight(
+        api.nvim_buf_add_highlight(
           preview_buf,
           preview_ns,
           M.config.hl_group,
@@ -396,7 +398,7 @@ local function incremental_rename_execute(new_name)
       "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:
 %s
 Active language servers: %s
-Buffer name: %s]]):format(vim.v.errmsg, vim.inspect(client_names), vim.api.nvim_buf_get_name(0)),
+Buffer name: %s]]):format(vim.v.errmsg, vim.inspect(client_names), api.nvim_buf_get_name(0)),
       vim.lsp.log_levels.ERROR
     )
   elseif state.err then
@@ -415,7 +417,7 @@ M.rename = function()
 end
 
 local create_user_command = function(cmd_name)
-  vim.api.nvim_create_user_command(cmd_name, function(opts)
+  api.nvim_create_user_command(cmd_name, function(opts)
     incremental_rename_execute(opts.args)
   end, { nargs = 1, addr = "lines", preview = incremental_rename_preview })
 end
@@ -444,10 +446,10 @@ M.setup = function(user_config)
     M.config.input_buffer = dressing_config
   end
 
-  local group = vim.api.nvim_create_augroup("inc-rename.nvim", { clear = true })
+  local group = api.nvim_create_augroup("inc-rename.nvim", { clear = true })
   -- We need to be able to tell when the command was cancelled to refetch the references.
   -- Otherwise the same variable would be renamed every time.
-  vim.api.nvim_create_autocmd({ "CmdLineLeave" }, {
+  api.nvim_create_autocmd({ "CmdLineLeave" }, {
     group = group,
     callback = tear_down,
   })
