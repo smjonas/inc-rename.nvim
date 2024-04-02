@@ -354,6 +354,7 @@ end
 
 -- Sends a LSP rename request and optionally displays a message to the user showing
 -- how many instances were renamed in how many files
+---@param new_name string
 local function perform_lsp_rename(new_name)
   local params = vim.lsp.util.make_position_params()
   params.newName = new_name
@@ -382,13 +383,20 @@ local function perform_lsp_rename(new_name)
 end
 
 -- Called when the command is executed (user pressed enter)
+---@param new_name string
 local function incremental_rename_execute(new_name)
   -- Any errors that occur in the preview function are not directly shown to the user but are stored in vim.v.errmsg.
   -- For more info, see https://github.com/neovim/neovim/issues/18910.
   if vim.v.errmsg ~= "" then
+    local client_names = vim.tbl_map(function(client)
+      return client.name
+    end, get_clients(0))
     vim.notify(
-      "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:\n"
-        .. vim.v.errmsg,
+      ([[
+      "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:
+%s
+Active language servers: %s
+Buffer name: %s]]):format(vim.v.errmsg, vim.inspect(client_names), vim.api.nvim_buf_get_name(0)),
       vim.lsp.log_levels.ERROR
     )
   elseif state.err then
