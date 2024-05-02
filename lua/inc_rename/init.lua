@@ -192,6 +192,9 @@ local function tear_down(switch_buffer)
       pcall(api.nvim_set_current_win, state.win_id)
     end
   end
+  -- Remove command from commandline history to not prevent the user from
+  -- navigating to older entries due to the behavior of command preview
+  vim.fn.histdel("cmd", "^" .. M.config.cmd_name)
 end
 
 local function initialize_input_buffer(default)
