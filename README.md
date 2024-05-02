@@ -141,7 +141,7 @@ require("inc_rename").setup {
 <details>
     <summary>💡 Renaming across multiple files</summary>
 
-When renaming across multiple files, make sure to save all affected buffers with
+</br>When renaming across multiple files, make sure to save all affected buffers with
 `:wa`. If the Nvim option `inccommand` is set to `split` (`:set inccommand=split`),
 a buffer with information about all identifiers to be renamed will be shown as you type.
 
