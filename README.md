@@ -137,3 +137,17 @@ require("inc_rename").setup {
   post_hook = nil, -- callback to run after renaming, receives the result table (from LSP handler) as an argument
 }
 ```
+
+<details>
+    <summary>💡 Renaming across multiple files</summary>
+
+When renaming across multiple files, make sure to save all affected buffers with
+`:wa`. If the Nvim option `inccommand` is set to `split` (`:set inccommand=split`),
+a buffer with information about all identifiers to be renamed will be shown as you type.
+
+Here is an example of how this could look like:
+<div align="center">
+<img src="https://github.com/smjonas/inc-rename.nvim/assets/40792180/36cf0324-09a1-4b3b-8561-ffe3626d52b1">
+</div>
+
+</details>
