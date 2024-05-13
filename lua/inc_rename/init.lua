@@ -19,10 +19,11 @@ local api = vim.api
 ---@field err table?
 
 ---@class inc_rename.UserConfig
----@field cmd_name string
----@field hl_group string
----@field preview_empty_name boolean
----@field show_message boolean
+---@field cmd_name string?
+---@field hl_group string?
+---@field preview_empty_name boolean?
+---@field show_message boolean?
+---@field save_in_cmdline_history boolean?
 ---@field input_buffer_type "dressing"?
 ---@field post_hook fun(result: any)?
 
@@ -35,6 +36,7 @@ M.default_config = {
   hl_group = "Substitute",
   preview_empty_name = false,
   show_message = true,
+  save_in_cmdline_history = true,
   input_buffer_type = nil,
   post_hook = nil,
 }
@@ -191,6 +193,13 @@ local function tear_down(switch_buffer)
       -- May fail (e.g. in command line window)
       pcall(api.nvim_set_current_win, state.win_id)
     end
+  end
+  if not M.config.save_in_cmdline_history then
+    -- Remove command from commandline history to not prevent the user from
+    -- navigating to older entries due to the behavior of command preview (opt-in)
+    vim.schedule(function()
+      vim.fn.histdel("cmd", "^" .. M.config.cmd_name)
+    end)
   end
 end
 
