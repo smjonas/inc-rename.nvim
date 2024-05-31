@@ -81,6 +81,13 @@ local function buf_is_visible(bufnr)
   return false
 end
 
+---@param bufnr number
+local function load_buffer(bufnr)
+  if not api.nvim_buf_is_loaded(bufnr) then
+    vim.fn.bufload(bufnr)
+  end
+end
+
 local function cache_lines(result)
   local cached_lines = vim.defaulttable()
   for _, res in ipairs(result) do
@@ -91,9 +98,7 @@ local function cache_lines(result)
       local is_visible = buf_is_visible(bufnr)
       local line_nr = range.start.line
       -- Make sure buffer is loaded before retrieving the line
-      if not api.nvim_buf_is_loaded(bufnr) then
-        vim.fn.bufload(bufnr)
-      end
+      load_buffer(bufnr)
       local line = api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
       local start_col, end_col = range.start.character, range["end"].character
       ---@type inc_rename.LineInfo
@@ -238,6 +243,7 @@ local function populate_preview_buf(preview_buf, buf_infos, preview_ns)
     return a.count < b.count
   end)
 
+  vim.g.prev = ""
   for _, infos in ipairs(sorted_buf_infos) do
     local filename_info = ("%s (%d instance%s):"):format(infos.filename, infos.count, infos.count == 1 and "" or "s")
     api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { filename_info })
@@ -251,6 +257,7 @@ local function populate_preview_buf(preview_buf, buf_infos, preview_ns)
 
     for _, info in ipairs(infos) do
       local prefix = ("|%d| "):format(info.line_nr + 1)
+      vim.g.prev = vim.g.prev .. vim.inspect(info)
       api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { prefix .. info.updated_line })
       for _, hl_pos in ipairs(info.hl_positions) do
         api.nvim_buf_add_highlight(
@@ -278,6 +285,64 @@ local function update_input_buffer(new_name, input_bufnr, preview_ns, cmd_name)
   local cursor_pos = vim.fn.getcmdpos() - cmd_prefix_len - 1
   -- Create a fake cursor in the input buffer
   api.nvim_buf_add_highlight(input_bufnr, preview_ns, "Cursor", 0, cursor_pos, cursor_pos + 1)
+end
+
+---@param bufnr integer
+---@param preview_buf integer?
+---@param preview_buf_infos table<string, table>
+---@param line_nr number
+---@param line_infos inc_rename.LineInfo[]
+---@param preview_fn_args table
+function M.apply_highlights_fn(bufnr, preview_buf, preview_buf_infos, line_nr, line_infos, preview_fn_args)
+  local new_name = preview_fn_args.new_name
+  local preview_ns = preview_fn_args.preview_ns
+  local opts = preview_fn_args.opts
+  -- Rust-analyzer does not return references in ascending
+  -- order for a given line number, so sort it (#47)
+  table.sort(line_infos, function(a, b)
+    return a.start_col < b.start_col
+  end)
+  local offset = 0
+  local hl_positions = {}
+
+  for _, info in ipairs(line_infos) do
+    if preview_buf or info.is_visible then
+      -- Use nvim_buf_set_text instead of nvim_buf_set_lines to preserve ext-marks
+      -- vim.g.err = vim.g.err .. " info: " .. vim.inspect(info)
+      api.nvim_buf_set_text(bufnr, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
+      table.insert(hl_positions, {
+        start_col = info.start_col + offset,
+        end_col = info.start_col + #new_name + offset,
+      })
+      -- Offset by the length difference between the new and old names
+      offset = offset + #new_name - (info.end_col - info.start_col)
+    end
+  end
+
+  for _, hl_pos in ipairs(hl_positions) do
+    api.nvim_buf_add_highlight(
+      bufnr or opts.bufnr,
+      preview_ns,
+      M.config.hl_group,
+      line_nr,
+      hl_pos.start_col,
+      hl_pos.end_col
+    )
+    if preview_buf then
+      api.nvim_buf_add_highlight(preview_buf, preview_ns, M.config.hl_group, line_nr, hl_pos.start_col, hl_pos.end_col)
+    end
+  end
+
+  if preview_buf then
+    local buf = line_infos[1].bufnr
+    load_buffer(bufnr)
+    local filename = api.nvim_buf_get_name(buf)
+    local updated_line = api.nvim_buf_get_lines(buf, line_nr, line_nr + 1, false)[1]
+    table.insert(
+      preview_buf_infos[filename],
+      { updated_line = updated_line, line_nr = line_nr, hl_positions = hl_positions }
+    )
+  end
 end
 
 -- Called when the user is still typing the command or the command arguments
@@ -317,70 +382,17 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     return M.config.input_buffer_config ~= nil and 2
   end
 
-  ---@param bufnr integer
-  ---@param preview_bufnr integer?
-  ---@param preview_buf_infos table<string, table>
-  ---@param line_nr number
-  ---@param line_infos table<inc_rename.LineInfo[]>
-  local function apply_highlights_fn(bufnr, preview_bufnr, preview_buf_infos, line_nr, line_infos)
-    -- Rust-analyzer does not return references in ascending
-    -- order for a given line number, so sort it (#47)
-    table.sort(line_infos, function(a, b)
-      return a.start_col < b.start_col
-    end)
-    local offset = 0
-    local hl_positions = {}
-
-    for _, info in ipairs(line_infos) do
-      if preview_bufnr or info.is_visible then
-        -- Use nvim_buf_set_text instead of nvim_buf_set_lines to preserve ext-marks
-        api.nvim_buf_set_text(bufnr, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
-        table.insert(hl_positions, {
-          start_col = info.start_col + offset,
-          end_col = info.start_col + #new_name + offset,
-        })
-        -- Offset by the length difference between the new and old names
-        offset = offset + #new_name - (info.end_col - info.start_col)
-      end
-    end
-
-    for _, hl_pos in ipairs(hl_positions) do
-      api.nvim_buf_add_highlight(
-        bufnr or opts.bufnr,
-        preview_ns,
-        M.config.hl_group,
-        line_nr,
-        hl_pos.start_col,
-        hl_pos.end_col
-      )
-      if preview_buf then
-        api.nvim_buf_add_highlight(
-          preview_buf,
-          preview_ns,
-          M.config.hl_group,
-          line_nr,
-          hl_pos.start_col,
-          hl_pos.end_col
-        )
-      end
-    end
-
-    if preview_buf then
-      local filename = api.nvim_buf_get_name(line_infos[1].bufnr)
-      local updated_line = api.nvim_buf_get_lines(line_infos[1].bufnr, line_nr, line_nr + 1, false)[1]
-      table.insert(
-        preview_buf_infos[filename],
-        { updated_line = updated_line, line_nr = line_nr, hl_positions = hl_positions }
-      )
-    end
-  end
-
   -- Only used when preview_buf is not nil
   local preview_buf_infos = vim.defaulttable()
 
+  local preview_fn_args = {
+    new_name = new_name,
+    preview_ns = preview_ns,
+    opts = opts,
+  }
   for bufnr, line_infos_per_bufnr in pairs(state.cached_line_infos_per_bufnr) do
     for line_nr, line_infos in pairs(line_infos_per_bufnr) do
-      apply_highlights_fn(bufnr, preview_buf, preview_buf_infos, line_nr, line_infos)
+      M.apply_highlights_fn(bufnr, preview_buf, preview_buf_infos, line_nr, line_infos, preview_fn_args)
     end
   end
 
@@ -457,8 +469,9 @@ local function incremental_rename_execute(new_name)
       ([[
       "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:
 %s
+%s
 Active language servers: %s
-Buffer name: %s]]):format(vim.v.errmsg, vim.inspect(client_names), api.nvim_buf_get_name(0)),
+Buffer name: %s]]):format(vim.v.errmsg, vim.g.err, vim.inspect(client_names), api.nvim_buf_get_name(0)),
       vim.lsp.log_levels.ERROR
     )
   elseif state.err then
