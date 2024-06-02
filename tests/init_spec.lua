@@ -46,7 +46,7 @@ local function test_rename_and_highlight(before, new_name, line_infos, expected_
   local preview_fn_args = { new_name = new_name, preview_ns = ns }
   for line_nr, line_infos_per_line_nr in pairs(line_infos) do
     assert(line_nr >= 1)
-    inc_rename.apply_highlights_fn(0, nil, {}, line_nr - 1, line_infos_per_line_nr, preview_fn_args)
+    inc_rename._apply_highlights_fn(0, line_nr - 1, line_infos_per_line_nr, preview_fn_args)
     assert.are_same(expected_lines[line_nr], get_buf_lines(0)[line_nr])
   end
   for line_nr, expected_hls_per_line in pairs(expected_hls) do
