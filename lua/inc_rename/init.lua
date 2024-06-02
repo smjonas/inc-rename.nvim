@@ -217,7 +217,7 @@ local function initialize_input_buffer(default)
   end
 end
 
-local function populate_preview_buf(preview_buf, buf_infos, preview_ns)
+M._populate_preview_buf = function(preview_buf, buf_infos, preview_ns)
   local cur_line = 0
   local sorted_buf_infos = {}
   for filename, infos in pairs(buf_infos) do
@@ -371,9 +371,8 @@ function M._apply_highlights_fn_with_preview_buf(
     api.nvim_buf_add_highlight(preview_buf, preview_ns, M.config.hl_group, line_nr, hl_pos.start_col, hl_pos.end_col)
   end
 
-  local buf = line_infos[1].bufnr
-  local filename = api.nvim_buf_get_name(buf)
-  local updated_line = api.nvim_buf_get_lines(buf, line_nr, line_nr + 1, false)[1]
+  local filename = api.nvim_buf_get_name(bufnr)
+  local updated_line = api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
   table.insert(
     preview_buf_infos[filename],
     { updated_line = updated_line, line_nr = line_nr, hl_positions = hl_positions }
@@ -443,7 +442,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   end
 
   if preview_buf then
-    populate_preview_buf(preview_buf, preview_buf_infos, preview_ns)
+    M._populate_preview_buf(preview_buf, preview_buf_infos, preview_ns)
   end
   return 2
 end
