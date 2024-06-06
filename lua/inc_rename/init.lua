@@ -3,7 +3,7 @@ local M = {}
 local api = vim.api
 
 ---@class inc_rename.LineInfo
----@field text string
+---@field prev_text string
 ---@field start_col integer
 ---@field end_col integer
 ---@field bufnr number
@@ -322,6 +322,7 @@ function M._apply_highlights_fn(bufnr, line_nr, line_infos, preview_fn_args)
 end
 
 ---@param bufnr integer
+---@param buf_is_visible boolean
 ---@param preview_buf integer
 ---@param preview_buf_infos table<string, table>
 ---@param line_nr number
@@ -329,6 +330,7 @@ end
 ---@param preview_fn_args table
 function M._apply_highlights_fn_with_preview_buf(
   bufnr,
+  buf_is_visible,
   preview_buf,
   preview_buf_infos,
   line_nr,
@@ -345,34 +347,41 @@ function M._apply_highlights_fn_with_preview_buf(
   end)
   local offset = 0
   local hl_positions = {}
+  local original_line = api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
 
   for _, info in ipairs(line_infos) do
-    if info.is_visible then
-      -- Use nvim_buf_set_text instead of nvim_buf_set_lines to preserve ext-marks
-      api.nvim_buf_set_text(bufnr, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
-    end
+    -- Use nvim_buf_set_text instead of nvim_buf_set_lines to preserve ext-marks
+    api.nvim_buf_set_text(bufnr, line_nr, info.start_col + offset, line_nr, info.end_col + offset, { new_name })
     table.insert(hl_positions, {
       start_col = info.start_col + offset,
       end_col = info.start_col + #new_name + offset,
+      is_visible = info.is_visible,
     })
     -- Offset by the length difference between the new and old names
     offset = offset + #new_name - (info.end_col - info.start_col)
   end
 
+  local updated_line = api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
+  if not buf_is_visible then
+    -- Since buffer is not visible, must revert to original line contents.
+    api.nvim_buf_set_text(bufnr, line_nr, 0, line_nr, -1, { original_line })
+  end
+
   for _, hl_pos in ipairs(hl_positions) do
-    api.nvim_buf_add_highlight(
-      bufnr or opts.bufnr,
-      preview_ns,
-      M.config.hl_group,
-      line_nr,
-      hl_pos.start_col,
-      hl_pos.end_col
-    )
+    if hl_pos.is_visible then
+      api.nvim_buf_add_highlight(
+        bufnr or opts.bufnr,
+        preview_ns,
+        M.config.hl_group,
+        line_nr,
+        hl_pos.start_col,
+        hl_pos.end_col
+      )
+    end
     api.nvim_buf_add_highlight(preview_buf, preview_ns, M.config.hl_group, line_nr, hl_pos.start_col, hl_pos.end_col)
   end
 
   local filename = api.nvim_buf_get_name(bufnr)
-  local updated_line = api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
   table.insert(
     preview_buf_infos[filename],
     { updated_line = updated_line, line_nr = line_nr, hl_positions = hl_positions }
@@ -425,10 +434,12 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     opts = opts,
   }
   for bufnr, line_infos_per_bufnr in pairs(state.cached_line_infos_per_bufnr) do
+    local buf_visible = buf_is_visible(bufnr)
     for line_nr, line_infos in pairs(line_infos_per_bufnr) do
       if preview_buf then
         M._apply_highlights_fn_with_preview_buf(
           bufnr,
+          buf_visible,
           preview_buf,
           preview_buf_infos,
           line_nr,

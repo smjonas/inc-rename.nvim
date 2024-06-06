@@ -39,8 +39,9 @@ local function assert_line_hls_match(expected_hls, actual_hl_positions)
   end
 end
 
-local function make_line_info(start_col, end_col, line)
-  return { start_col = start_col, end_col = end_col, is_visible = true, text = line }
+local function make_line_info(start_col, end_col, line, is_visible)
+  local visible = is_visible == nil and true or is_visible
+  return { start_col = start_col, end_col = end_col, is_visible = visible, text = line }
 end
 
 local function test_rename_and_highlight(before, new_name, line_infos, expected_lines, expected_hls)
@@ -61,6 +62,7 @@ end
 
 local function test_rename_and_highlight_with_preview_buf(
   buf_name,
+  buf_is_visible,
   before,
   new_name,
   line_infos,
@@ -81,6 +83,7 @@ local function test_rename_and_highlight_with_preview_buf(
     line_infos_per_line_nr.bufnr = 0
     inc_rename._apply_highlights_fn_with_preview_buf(
       0,
+      buf_is_visible,
       preview_buf,
       preview_buf_infos,
       line_nr - 1,
@@ -160,6 +163,7 @@ describe("Renaming and highlighting should work with inccommand=split", function
     local buf_full_name = vim.fn.getcwd() .. "/" .. buf_name
     test_rename_and_highlight_with_preview_buf(
       buf_name,
+      true,
       { line },
       "abc",
       { { make_line_info(6, 7, line) } },
@@ -170,17 +174,37 @@ describe("Renaming and highlighting should work with inccommand=split", function
     )
   end)
 
-  it("with single file (multiple lines)", function()
+  it("with single visible file (multiple lines)", function()
     local lines = { "local x = 1", "x = y" }
     local buf_name = "bufname"
     local buf_full_name = vim.fn.getcwd() .. "/" .. buf_name
     test_rename_and_highlight_with_preview_buf(
       buf_name,
+      true,
       lines,
       "abc",
-      { { make_line_info(6, 7, lines[1]) }, { make_line_info(0, 1, lines[2]) } },
+      { { make_line_info(6, 7, lines[1], true) }, { make_line_info(0, 1, lines[2], true) } },
       { "local abc = 1", "abc = y" },
       { "local ~~~ = 1", "~~~ = y" },
+      { ("%s (2 instances):"):format(buf_full_name), "|1| local abc = 1", "|2| abc = y" },
+      { ("%s (2 instances):"):format(buf_full_name), "|1| local ~~~ = 1", "|2| ~~~ = y" }
+    )
+  end)
+
+  it("with single invisible file (multiple lines)", function()
+    local lines = { "local x = 1", "x = y" }
+    local buf_name = "bufname"
+    local buf_full_name = vim.fn.getcwd() .. "/" .. buf_name
+    test_rename_and_highlight_with_preview_buf(
+      buf_name,
+      false,
+      lines,
+      "abc",
+      { { make_line_info(6, 7, lines[1], false) }, { make_line_info(0, 1, lines[2], false) } },
+      { "local x = 1", "x = y" },
+      -- No highlights should be applied since the buffer is invisible
+      { "local x = 1", "x = y" },
+      -- But preview should still be correct
       { ("%s (2 instances):"):format(buf_full_name), "|1| local abc = 1", "|2| abc = y" },
       { ("%s (2 instances):"):format(buf_full_name), "|1| local ~~~ = 1", "|2| ~~~ = y" }
     )
