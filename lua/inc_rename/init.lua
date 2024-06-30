@@ -136,7 +136,7 @@ local function filter_duplicates(cached_lines)
 end
 
 ---@param bufnr integer
----@return lsp.Client[]
+---@return vim.lsp.Client[]
 local function get_clients(bufnr)
   local opts = { bufnr = bufnr }
   local clients = {}
@@ -164,7 +164,17 @@ local function fetch_lsp_references(bufnr, lsp_params)
 
   local params = lsp_params or vim.lsp.util.make_position_params()
   params.context = { includeDeclaration = true }
-  vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, _, _)
+  vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, ctx, _)
+    local clientSupported = false
+    for _, c in ipairs(clients) do
+      if c.id == ctx.client_id then
+        clientSupported = true
+        break
+      end
+    end
+    if not clientSupported then
+      return
+    end
     if err then
       set_error("[inc-rename] Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
       return
