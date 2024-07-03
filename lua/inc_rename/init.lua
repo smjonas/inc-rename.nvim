@@ -165,14 +165,10 @@ local function fetch_lsp_references(bufnr, lsp_params)
   local params = lsp_params or vim.lsp.util.make_position_params()
   params.context = { includeDeclaration = true }
   vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, ctx, _)
-    local clientSupported = false
-    for _, c in ipairs(clients) do
-      if c.id == ctx.client_id then
-        clientSupported = true
-        break
-      end
-    end
-    if not clientSupported then
+    local client_supported = vim.iter(clients):any(function(client)
+      return client.id == ctx.client_id
+    end)
+    if not client_supported then
       return
     end
     if err then
@@ -332,7 +328,7 @@ function M._apply_highlights_fn(bufnr, line_nr, line_infos, preview_fn_args)
 end
 
 ---@param bufnr integer
----@param buf_is_visible boolean
+---@param buf_visible boolean
 ---@param preview_buf integer
 ---@param preview_buf_infos table<string, table>
 ---@param line_nr number
@@ -340,7 +336,7 @@ end
 ---@param preview_fn_args table
 function M._apply_highlights_fn_with_preview_buf(
   bufnr,
-  buf_is_visible,
+  buf_visible,
   preview_buf,
   preview_buf_infos,
   line_nr,
@@ -372,7 +368,7 @@ function M._apply_highlights_fn_with_preview_buf(
   end
 
   local updated_line = api.nvim_buf_get_lines(bufnr, line_nr, line_nr + 1, false)[1]
-  if not buf_is_visible then
+  if not buf_visible then
     -- Since buffer is not visible, must revert to original line contents.
     api.nvim_buf_set_text(bufnr, line_nr, 0, line_nr, -1, { original_line })
   end
