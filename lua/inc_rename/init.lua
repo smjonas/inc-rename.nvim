@@ -152,6 +152,24 @@ local function get_clients(bufnr)
   return clients
 end
 
+local function client_position_params(win, extra)
+  win = win or vim.api.nvim_get_current_win()
+  if not vim.fn.has("nvim-0.11") then
+    local params = vim.lsp.util.make_position_params(win)
+    if extra then
+      params = vim.tbl_extend("force", params, extra)
+    end
+    return params
+  end
+  return function(client)
+    local params = vim.lsp.util.make_position_params(win, client.offset_encoding)
+    if extra then
+      params = vim.tbl_extend("force", params, extra)
+    end
+    return params
+  end
+end
+
 -- Get positions of LSP reference symbols
 ---@param bufnr number
 ---@param lsp_params table
@@ -162,8 +180,10 @@ local function fetch_lsp_references(bufnr, lsp_params)
     return
   end
 
-  local params = lsp_params or vim.lsp.util.make_position_params()
-  params.context = { includeDeclaration = true }
+  local win = vim.api.nvim_get_current_win()
+  local params = lsp_params or client_position_params(win, {
+    context = { includeDeclaration = true },
+  })
   vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, ctx, _)
     local client_supported = vim.iter(clients):any(function(client)
       return client.id == ctx.client_id
@@ -488,9 +508,10 @@ end
 -- how many instances were renamed in how many files
 ---@param new_name string
 local function perform_lsp_rename(new_name)
-  local params = vim.lsp.util.make_position_params()
-  params.newName = new_name
-
+  local win_id = vim.api.nvim_get_current_win()
+  local params = client_position_params(win_id, {
+    newName = new_name,
+  })
   vim.lsp.buf_request(0, "textDocument/rename", params, function(err, result, ctx, _)
     if err and err.message then
       vim.notify("[inc-rename] Error while renaming: " .. err.message, vim.lsp.log_levels.ERROR)
