@@ -209,6 +209,25 @@ local function tear_down(switch_buffer)
   end
 end
 
+---Leave command-line mode early when the current element cannot be renamed
+---@param bufnr number
+local check_can_rename_at_position = function(bufnr)
+  local params = vim.lsp.util.make_position_params()
+  vim.lsp.buf_request(bufnr, "textDocument/prepareRename", params, function(err, result, ctx, _)
+    if err then
+      local client = vim.lsp.get_client_by_id(ctx.client_id)
+      vim.notify(
+        ("[inc-rename] Cannot rename this element, server '%s' responded with: %s"):format(client.name, err.message),
+        vim.lsp.log_levels.WARN
+      )
+      -- Leave command-line mode
+      api.nvim_feedkeys(escape, "n", false)
+      tear_down(false)
+      return
+    end
+  end)
+end
+
 local function initialize_input_buffer(default)
   state.win_id = api.nvim_get_current_win()
   vim.ui.input({ default = default }, function() end)
@@ -410,6 +429,8 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   -- Store the lines of the buffer at the first invocation.
   -- should_fetch_references will be reset when the command is cancelled (see setup function).
   if state.should_fetch_references then
+    check_can_rename_at_position(opts.bufnr or cur_buf)
+
     state.should_fetch_references = false
     state.err = nil
     fetch_lsp_references(opts.bufnr or cur_buf, opts.lsp_params)
