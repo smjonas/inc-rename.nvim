@@ -152,17 +152,18 @@ local function get_clients(bufnr)
   return clients
 end
 
-local function client_position_params(win, extra)
-  win = win or vim.api.nvim_get_current_win()
+local function client_position_params(win_id, extra)
+  win_id = win_id or vim.api.nvim_get_current_win()
   if not vim.fn.has("nvim-0.11") then
-    local params = vim.lsp.util.make_position_params(win)
+    ---@diagnostic disable-next-line: missing-parameter
+    local params = vim.lsp.util.make_position_params(win_id)
     if extra then
       params = vim.tbl_extend("force", params, extra)
     end
     return params
   end
   return function(client)
-    local params = vim.lsp.util.make_position_params(win, client.offset_encoding)
+    local params = vim.lsp.util.make_position_params(win_id, client.offset_encoding)
     if extra then
       params = vim.tbl_extend("force", params, extra)
     end
@@ -180,8 +181,8 @@ local function fetch_lsp_references(bufnr, lsp_params)
     return
   end
 
-  local win = vim.api.nvim_get_current_win()
-  local params = lsp_params or client_position_params(win, {
+  local win_id = vim.api.nvim_get_current_win()
+  local params = lsp_params or client_position_params(win_id, {
     context = { includeDeclaration = true },
   })
   vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, ctx, _)
