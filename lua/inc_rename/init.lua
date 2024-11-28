@@ -154,7 +154,7 @@ end
 
 local function client_position_params(win_id, extra)
   win_id = win_id or vim.api.nvim_get_current_win()
-  if not vim.fn.has("nvim-0.11") then
+  if vim.fn.has("nvim-0.11") == 0 then
     ---@diagnostic disable-next-line: missing-parameter
     local params = vim.lsp.util.make_position_params(win_id)
     if extra then
