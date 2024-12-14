@@ -491,7 +491,7 @@ local function show_success_message(result)
 
   local with_edits = result.documentChanges ~= nil
   for _, change in pairs(result.documentChanges or result.changes) do
-    changed_instances = changed_instances + (with_edits and #change.edits or #change)
+    changed_instances = changed_instances + (with_edits and #(change.edits or {}) or #change)
     changed_files = changed_files + 1
   end
 
