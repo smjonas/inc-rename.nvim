@@ -1,5 +1,7 @@
 local M = {}
 
+local utils
+
 local api = vim.api
 
 ---@class inc_rename.LineInfo
@@ -59,7 +61,7 @@ local state = {
 }
 
 local backspace = api.nvim_replace_termcodes("<bs>", true, false, true)
-local escape = api.nvim_replace_termcodes("<esc>", true, false, true)
+local ctrl_c = api.nvim_replace_termcodes("<C-c>", true, false, true)
 
 ---@param msg string
 ---@param level number
@@ -135,56 +137,21 @@ local function filter_duplicates(cached_lines)
   return cached_lines
 end
 
----@param bufnr integer
----@return vim.lsp.Client[]
-local function get_clients(bufnr)
-  local opts = { bufnr = bufnr }
-  local clients = {}
-  if vim.lsp.get_clients then
-    clients = vim.lsp.get_clients(opts)
-  else
-    ---@diagnostic disable-next-line: deprecated
-    clients = vim.lsp.get_active_clients(opts)
-  end
-  clients = vim.tbl_filter(function(client)
-    return client.supports_method("textDocument/rename")
-  end, clients)
-  return clients
-end
-
-local function client_position_params(win_id, extra)
-  win_id = win_id or vim.api.nvim_get_current_win()
-  if vim.fn.has("nvim-0.11") == 0 then
-    ---@diagnostic disable-next-line: missing-parameter
-    local params = vim.lsp.util.make_position_params(win_id)
-    if extra then
-      params = vim.tbl_extend("force", params, extra)
-    end
-    return params
-  end
-  return function(client)
-    local params = vim.lsp.util.make_position_params(win_id, client.offset_encoding)
-    if extra then
-      params = vim.tbl_extend("force", params, extra)
-    end
-    return params
-  end
-end
-
 -- Get positions of LSP reference symbols
 ---@param bufnr number
 ---@param lsp_params table
 local function fetch_lsp_references(bufnr, lsp_params)
-  local clients = get_clients(bufnr)
+  local clients = utils.get_active_clients(bufnr, "textDocument/rename")
   if #clients == 0 then
-    set_error("[inc-rename] No active language server with rename capability", vim.lsp.log_levels.WARN)
+    set_error("[inc-rename] No active language server with textDocument/rename capability", vim.lsp.log_levels.WARN)
     return
   end
 
   local win_id = vim.api.nvim_get_current_win()
-  local params = lsp_params or client_position_params(win_id, {
-    context = { includeDeclaration = true },
-  })
+  local params = lsp_params
+    or utils.make_client_position_params(win_id, {
+      context = { includeDeclaration = true },
+    })
   vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, ctx, _)
     local client_supported = vim.iter(clients):any(function(client)
       return client.id == ctx.client_id
@@ -199,7 +166,7 @@ local function fetch_lsp_references(bufnr, lsp_params)
     if not result or vim.tbl_isempty(result) then
       set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
       -- Leave command line mode when there is nothing to rename
-      api.nvim_feedkeys(escape, "n", false)
+      api.nvim_feedkeys(ctrl_c, "n", false)
       return
     end
     state.cached_line_infos_per_bufnr = filter_duplicates(cache_lines(result))
@@ -228,6 +195,31 @@ local function tear_down(switch_buffer)
       vim.fn.histdel("cmd", "^" .. M.config.cmd_name)
     end)
   end
+end
+
+---Leave command-line mode early when the current element cannot be renamed
+---@param bufnr number
+local check_can_rename_at_position = function(bufnr)
+  local clients = utils.get_active_clients(bufnr, "textDocument/prepareRename")
+  -- No client supporting prepareRename, but might still support rename
+  if #clients == 0 then
+    return
+  end
+  local win_id = vim.api.nvim_get_current_win()
+  local params = utils.make_client_position_params(win_id)
+  vim.lsp.buf_request(bufnr, "textDocument/prepareRename", params, function(err, result, ctx, _)
+    if err then
+      -- Leave command-line mode
+      api.nvim_feedkeys(ctrl_c, "n", false)
+      tear_down(false)
+      local client = vim.lsp.get_client_by_id(ctx.client_id)
+      vim.notify(
+        ("[inc-rename] Cannot rename this element, server '%s' responded with: %s"):format(client.name, err.message),
+        vim.lsp.log_levels.WARN
+      )
+      return
+    end
+  end)
 end
 
 local function initialize_input_buffer(default)
@@ -431,6 +423,8 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
   -- Store the lines of the buffer at the first invocation.
   -- should_fetch_references will be reset when the command is cancelled (see setup function).
   if state.should_fetch_references then
+    check_can_rename_at_position(opts.bufnr or cur_buf)
+
     state.should_fetch_references = false
     state.err = nil
     fetch_lsp_references(opts.bufnr or cur_buf, opts.lsp_params)
@@ -510,9 +504,7 @@ end
 ---@param new_name string
 local function perform_lsp_rename(new_name)
   local win_id = vim.api.nvim_get_current_win()
-  local params = client_position_params(win_id, {
-    newName = new_name,
-  })
+  local params = utils.make_client_position_params(win_id, { newName = new_name })
   vim.lsp.buf_request(0, "textDocument/rename", params, function(err, result, ctx, _)
     if err and err.message then
       vim.notify("[inc-rename] Error while renaming: " .. err.message, vim.lsp.log_levels.ERROR)
@@ -548,7 +540,7 @@ local function incremental_rename_execute(new_name)
   if vim.v.errmsg ~= "" then
     local client_names = vim.tbl_map(function(client)
       return client.name
-    end, get_clients(0))
+    end, utils.get_active_clients(0))
     vim.notify(
       ([[
       "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:
@@ -597,6 +589,7 @@ M.setup = function(user_config)
     )
     return
   end
+  utils = require("inc_rename.utils")
 
   ---@type inc_rename.PluginConfig
   ---@diagnostic disable-next-line: assign-type-mismatch
