@@ -100,7 +100,8 @@ The result should look something like this:
 </div>
 </br>
 
-> :bulb: Tip - try these `dressing.nvim` settings to position the input box above the
+> [!tip]
+> Try these `dressing.nvim` settings to position the input box above the
 > cursor to not cover the word being renamed (thank you
 > [@RaafatTurki](https://github.com/RaafatTurki) for the suggestion!):
 ```lua
@@ -158,5 +159,8 @@ Here is an example of how this could look like:
 <div align="center">
 <img src="https://github.com/smjonas/inc-rename.nvim/assets/40792180/36cf0324-09a1-4b3b-8561-ffe3626d52b1">
 </div>
+
+> [!tip]
+> Use `:set cmdwinheight=20` to change the height of the preview window.
 
 </details>
