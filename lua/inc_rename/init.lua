@@ -207,7 +207,8 @@ local check_can_rename_at_position = function(bufnr)
   end
   local win_id = vim.api.nvim_get_current_win()
   local params = utils.make_client_position_params(win_id)
-  vim.lsp.buf_request(bufnr, "textDocument/prepareRename", params, function(err, result, ctx, _)
+  -- vim.lsp.buf_request may fail (#73)
+  pcall(vim.lsp.buf_request, bufnr, "textDocument/prepareRename", params, function(err, result, ctx, _)
     if err then
       -- Leave command-line mode
       api.nvim_feedkeys(ctrl_c, "n", false)
