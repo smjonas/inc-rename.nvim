@@ -541,12 +541,14 @@ local function incremental_rename_execute(new_name)
     local client_names = vim.tbl_map(function(client)
       return client.name
     end, utils.get_active_clients(0))
+    local nvim_version = tostring(vim.version())
     vim.notify(
       ([[
       "[inc-rename] An error occurred in the preview function. Please report this error here: https://github.com/smjonas/inc-rename.nvim/issues:
 %s
+Nvim version: %s
 Active language servers: %s
-Buffer name: %s]]):format(vim.v.errmsg, vim.inspect(client_names), api.nvim_buf_get_name(0)),
+Buffer name: %s]]):format(vim.v.errmsg, nvim_version, vim.inspect(client_names), api.nvim_buf_get_name(0)),
       vim.lsp.log_levels.ERROR
     )
   elseif state.err then
