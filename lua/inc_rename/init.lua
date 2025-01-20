@@ -269,8 +269,9 @@ M._populate_preview_buf = function(preview_buf, buf_infos, preview_ns)
       return a.line_nr < b.line_nr
     end)
 
+    local max_line_nr = infos[#infos].line_nr + 1
     for _, info in ipairs(infos) do
-      local prefix = ("|%d| "):format(info.line_nr + 1)
+      local prefix = utils.get_aligned_line_prefix(info.line_nr + 1, max_line_nr)
       api.nvim_buf_set_lines(preview_buf, cur_line, cur_line + 1, false, { prefix .. info.updated_line })
       for _, hl_pos in ipairs(info.hl_positions) do
         api.nvim_buf_add_highlight(

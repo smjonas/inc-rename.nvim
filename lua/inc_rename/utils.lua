@@ -40,4 +40,16 @@ M.make_client_position_params = function(win_id, extra)
   end
 end
 
+---@param line_nr number
+---@param max_line_nr number
+M.get_aligned_line_prefix = function(line_nr, max_line_nr)
+  local line_nr_length = #tostring(line_nr)
+  local max_prefix_length = #tostring(max_line_nr)
+  local prefix = ""
+  if line_nr_length < max_prefix_length then
+    prefix = (" "):rep(max_prefix_length - line_nr_length)
+  end
+  return ("|%s%s| "):format(prefix, line_nr)
+end
+
 return M
