@@ -1,0 +1,61 @@
+name: Bug report
+description: Report an issue
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before** reporting an issue, make sure to read the [readme](https://github.com/smjonas/inc-rename.nvim)
+        and search [existing issues](https://github.com/smjonas/inc-rename.nvim/issues).
+  - type: checkboxes
+    attributes:
+      label: Did you check docs and existing issues?
+      description: Make sure you checked all of the below before submitting an issue
+      options:
+        - label: I have read the readme of inc-rename.nvim
+          required: true
+        - label: I have updated the plugin to the latest version before submitting this issue
+          required: true
+        - label: I have searched the existing issues of inc-rename.nvim
+          required: true
+  - type: input
+    attributes:
+      label: "Neovim version (output of `nvim -v`)"
+      placeholder: "NVIM v0.11.0-dev-1860+g877f3b7288"
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "Operating system/version"
+      placeholder: "Ubuntu 22.04"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: "Output of `:LspInfo`"
+      description: Please paste the output of `:LspInfo` here.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: Steps to reproduce the behavior. Include as much info as possible.
+      placeholder: |
+        1. Open the following file: ...
+        2. Navigate to the first symbol on line 10
+        2. Run `:IncRename new_name`
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected behavior
+      description: A concise description of what you expected to happen.
+    validations:
+      required: true
