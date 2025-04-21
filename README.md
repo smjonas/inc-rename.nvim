@@ -17,9 +17,7 @@ Install using your favorite package manager and call the `setup` function.
 ```lua
 {
   "smjonas/inc-rename.nvim",
-  config = function()
-    require("inc_rename").setup()
-  end,
+  opts = {}
 }
 ```
 </details>
