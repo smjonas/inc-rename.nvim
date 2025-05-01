@@ -506,32 +506,31 @@ end
 ---@param new_name string
 local function perform_lsp_rename(new_name)
   local win_id = vim.api.nvim_get_current_win()
-  local params = utils.make_client_position_params(win_id, { newName = new_name })
-  vim.lsp.buf_request(0, "textDocument/rename", params, function(err, result, ctx, _)
-    if err and err.message then
-      vim.notify("[inc-rename] Error while renaming: " .. err.message, vim.lsp.log_levels.ERROR)
-      return
-    end
+  local clients = utils.get_active_clients(0, "textDocument/rename")
+  local client = clients[1]
+  -- Only send request to first capable client (#45)
+  if client then
+    local params = vim.lsp.util.make_position_params(win_id, client.offset_encoding)
+    params = vim.tbl_extend("force", params, { newName = new_name })
+    client:request("textDocument/rename", params, function(err, result, _)
+      if err and err.message then
+        vim.notify("[inc-rename] Error while renaming: " .. err.message, vim.lsp.log_levels.ERROR)
+        return
+      end
 
-    if not result or vim.tbl_isempty(result) then
-      set_error("[inc-rename] Nothing renamed", vim.lsp.log_levels.WARN)
-      return
-    end
+      if not result or vim.tbl_isempty(result) then
+        vim.notify("[inc-rename] Nothing renamed" .. err.message, vim.lsp.log_levels.WARN)
+      end
+      vim.lsp.util.apply_workspace_edit(result, client.offset_encoding)
 
-    local client = vim.lsp.get_client_by_id(ctx.client_id)
-    if not client then
-      vim.notify("[inc-rename] Error while renaming (invalid client ID)", vim.lsp.log_levels.ERROR)
-      return
-    end
-    vim.lsp.util.apply_workspace_edit(result, client.offset_encoding)
-
-    if M.config.show_message then
-      show_success_message(result)
-    end
-    if M.config.post_hook then
-      M.config.post_hook(result)
-    end
-  end)
+      if M.config.show_message then
+        show_success_message(result)
+      end
+      if M.config.post_hook then
+        M.config.post_hook(result)
+      end
+    end)
+  end
 end
 
 -- Called when the command is executed (user pressed enter)
