@@ -512,7 +512,8 @@ local function perform_lsp_rename(new_name)
   if client then
     local params = vim.lsp.util.make_position_params(win_id, client.offset_encoding)
     params = vim.tbl_extend("force", params, { newName = new_name })
-    client:request("textDocument/rename", params, function(err, result, _)
+    ---@type lsp.Handler
+    local handler = function(err, result, _)
       if err and err.message then
         vim.notify("[inc-rename] Error while renaming: " .. err.message, vim.lsp.log_levels.ERROR)
         return
@@ -529,7 +530,13 @@ local function perform_lsp_rename(new_name)
       if M.config.post_hook then
         M.config.post_hook(result)
       end
-    end)
+    end
+    --- Deal with difference lsp.Client:request function between v0.10 and v0.11  (#79)
+    if vim.fn.has("nvim-0.11") == 0 then
+        client:_request("textDocument/rename", params, handler)
+    else
+        client:request("textDocument/rename", params, handler)
+    end
   end
 end
 
