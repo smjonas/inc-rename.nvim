@@ -137,6 +137,34 @@ local function filter_duplicates(cached_lines)
   return cached_lines
 end
 
+---@return {ok: boolean, err: string?}
+local function handle_references(clients, err, result, ctx)
+  local client_supported = vim.iter(clients):any(function(client)
+    return client.id == ctx.client_id
+  end)
+  if not client_supported then
+    return {
+      ok = false,
+    }
+  end
+  if err then
+    return {
+      ok = false,
+      err = "[inc-rename] Error while finding references: " .. err.message,
+    }
+  end
+  if not result or vim.tbl_isempty(result) then
+    return {
+      ok = false,
+      err = "[inc-rename] Nothing to rename",
+    }
+  end
+
+  return {
+    ok = true,
+  }
+end
+
 -- Get positions of LSP reference symbols
 ---@param bufnr number
 ---@param lsp_params table
@@ -152,27 +180,36 @@ local function fetch_lsp_references(bufnr, lsp_params)
     or utils.make_client_position_params(win_id, {
       context = { includeDeclaration = true },
     })
-  vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, ctx, _)
-    local client_supported = vim.iter(clients):any(function(client)
-      return client.id == ctx.client_id
-    end)
-    if not client_supported then
+
+  local client_response_counter = 0
+  local handle_references_success = false
+  vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, ctx, config)
+    client_response_counter = client_response_counter + 1
+    if handle_references_success then
+      -- A request has already succeeded, ignore other results.
       return
     end
-    if err then
-      set_error("[inc-rename] Error while finding references: " .. err.message, vim.lsp.log_levels.ERROR)
+
+    local handle_references_result = handle_references(clients, err, result, ctx)
+    if handle_references_result.ok then
+      handle_references_success = true
+      state.cached_line_infos_per_bufnr = filter_duplicates(cache_lines(result))
+      -- Hack to trigger command preview again now that results have arrived
+      if api.nvim_get_mode().mode == "c" then
+        api.nvim_feedkeys("a" .. backspace, "n", false)
+      end
+
       return
     end
-    if not result or vim.tbl_isempty(result) then
-      set_error("[inc-rename] Nothing to rename", vim.lsp.log_levels.WARN)
-      -- Leave command line mode when there is nothing to rename
+
+    -- only call set_error and exit when all clients have been exhausted
+    if client_response_counter == #clients then
+      if handle_references_result.err then
+        set_error(handle_references_result.err, vim.lsp.log_levels.WARN)
+      end
+      -- Leave command line mode when there is nothing to rename.
       api.nvim_feedkeys(ctrl_c, "n", false)
       return
-    end
-    state.cached_line_infos_per_bufnr = filter_duplicates(cache_lines(result))
-    -- Hack to trigger command preview again now that results have arrived
-    if api.nvim_get_mode().mode == "c" then
-      api.nvim_feedkeys("a" .. backspace, "n", false)
     end
   end)
 end
@@ -533,9 +570,9 @@ local function perform_lsp_rename(new_name)
     end
     --- Deal with difference lsp.Client:request function between v0.10 and v0.11  (#79)
     if vim.fn.has("nvim-0.11") == 0 then
-        client:_request("textDocument/rename", params, handler)
+      client:_request("textDocument/rename", params, handler)
     else
-        client:request("textDocument/rename", params, handler)
+      client:request("textDocument/rename", params, handler)
     end
   end
 end
