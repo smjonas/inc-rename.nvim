@@ -137,34 +137,6 @@ local function filter_duplicates(cached_lines)
   return cached_lines
 end
 
----@return {ok: boolean, err: string?}
-local function handle_references(clients, err, result, ctx)
-  local client_supported = vim.iter(clients):any(function(client)
-    return client.id == ctx.client_id
-  end)
-  if not client_supported then
-    return {
-      ok = false,
-    }
-  end
-  if err then
-    return {
-      ok = false,
-      err = "[inc-rename] Error while finding references: " .. err.message,
-    }
-  end
-  if not result or vim.tbl_isempty(result) then
-    return {
-      ok = false,
-      err = "[inc-rename] Nothing to rename",
-    }
-  end
-
-  return {
-    ok = true,
-  }
-end
-
 -- Get positions of LSP reference symbols
 ---@param bufnr number
 ---@param lsp_params table
@@ -190,19 +162,18 @@ local function fetch_lsp_references(bufnr, lsp_params)
       return
     end
 
-    local handle_references_result = handle_references(clients, err, result, ctx)
-    if handle_references_result.ok then
+    local ok, handle_references_result = utils.handle_references(clients, err, result, ctx)
+    if ok then
       handle_references_success = true
       state.cached_line_infos_per_bufnr = filter_duplicates(cache_lines(result))
       -- Hack to trigger command preview again now that results have arrived
       if api.nvim_get_mode().mode == "c" then
         api.nvim_feedkeys("a" .. backspace, "n", false)
       end
-
       return
     end
 
-    -- only call set_error and exit when all clients have been exhausted
+    -- Only call set_error and exit when all clients have been exhausted
     if client_response_counter == #clients then
       if handle_references_result.err then
         set_error(handle_references_result.err, vim.lsp.log_levels.WARN)
