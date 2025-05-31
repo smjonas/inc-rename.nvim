@@ -21,6 +21,24 @@ M.get_active_clients = function(bufnr, method)
   return clients
 end
 
+---@return boolean, string?
+M.handle_references = function(clients, err, result, ctx)
+  local client_supported = vim.iter(clients):any(function(client)
+    return client.id == ctx.client_id
+  end)
+  if not client_supported then
+    return false
+  end
+  if err then
+    return false, "[inc-rename] Error while finding references: " .. err.message
+  end
+  if not result or vim.tbl_isempty(result) then
+    return false, "[inc-rename] Nothing to rename"
+  end
+  return true
+end
+
+
 M.make_client_position_params = function(win_id, extra)
   win_id = win_id or vim.api.nvim_get_current_win()
   if vim.fn.has("nvim-0.11") == 0 then
