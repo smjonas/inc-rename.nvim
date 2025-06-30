@@ -26,7 +26,7 @@ local api = vim.api
 ---@field preview_empty_name boolean?
 ---@field show_message boolean?
 ---@field save_in_cmdline_history boolean?
----@field input_buffer_type "dressing"?
+---@field input_buffer_type "dressing"|"snacks"?
 ---@field post_hook fun(result: any)?
 
 ---@class inc_rename.PluginConfig : inc_rename.UserConfig
@@ -43,13 +43,6 @@ M.default_config = {
   post_hook = nil,
 }
 
-local dressing_config = {
-  filetype = "DressingInput",
-  close_window = function()
-    require("dressing.input").close()
-  end,
-}
-
 ---@type inc_rename.State
 local state = {
   should_fetch_references = true,
@@ -58,6 +51,45 @@ local state = {
   input_win_id = nil,
   input_bufnr = nil,
   preview_ns = nil,
+}
+
+local dressing_config = {
+  filetype = "DressingInput",
+  close_window = function(_)
+    require("dressing.input").close()
+  end,
+  initialize_input_buffer = function(default)
+    state.win_id = api.nvim_get_current_win()
+    vim.ui.input({ default = default }, function() end)
+    -- Open the input window and find the buffer and window IDs
+    for _, win_id in ipairs(api.nvim_list_wins()) do
+      local bufnr = api.nvim_win_get_buf(win_id)
+      if vim.bo[bufnr].filetype == M.config.input_buffer_config.filetype then
+        state.input_win_id = win_id
+        state.input_bufnr = bufnr
+        return
+      end
+    end
+  end,
+}
+
+local snacks_config = {
+  initialize_input_buffer = function(default)
+    state.win_id = api.nvim_get_current_win()
+    -- Snacks returns a snacks.win
+    ---@type snacks.win|nil
+    local snacks_win = vim.ui.input({ default = default }, function() end)
+    if snacks_win then
+      state.input_bufnr = snacks_win.buf
+      state.input_win_id = snacks_win.win
+    end
+  end,
+  close_window = function(input_win_id)
+    local input_buf = vim.api.nvim_win_get_buf(input_win_id)
+    -- Have to close the window and delete the buffer
+    vim.api.nvim_win_close(input_win_id, true)
+    vim.api.nvim_buf_delete(input_buf, { force = true })
+  end,
 }
 
 local backspace = api.nvim_replace_termcodes("<bs>", true, false, true)
@@ -189,7 +221,7 @@ local function tear_down(switch_buffer)
   state.cached_line_infos_per_bufnr = nil
   state.should_fetch_references = true
   if state.input_win_id and api.nvim_win_is_valid(state.input_win_id) then
-    M.config.input_buffer_config.close_window()
+    M.config.input_buffer_config.close_window(state.input_win_id)
     state.input_win_id = nil
     if switch_buffer then
       -- May fail (e.g. in command line window)
@@ -229,20 +261,6 @@ local check_can_rename_at_position = function(bufnr)
       return
     end
   end)
-end
-
-local function initialize_input_buffer(default)
-  state.win_id = api.nvim_get_current_win()
-  vim.ui.input({ default = default }, function() end)
-  -- Open the input window and find the buffer and window IDs
-  for _, win_id in ipairs(api.nvim_list_wins()) do
-    local bufnr = api.nvim_win_get_buf(win_id)
-    if vim.bo[bufnr].filetype == M.config.input_buffer_config.filetype then
-      state.input_win_id = win_id
-      state.input_bufnr = bufnr
-      return
-    end
-  end
 end
 
 M._populate_preview_buf = function(preview_buf, buf_infos, preview_ns)
@@ -440,7 +458,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
     fetch_lsp_references(opts.bufnr or cur_buf, opts.lsp_params)
 
     if M.config.input_buffer_config ~= nil then
-      initialize_input_buffer(opts.args)
+      M.config.input_buffer_config.initialize_input_buffer(opts.args)
     end
   end
 
@@ -614,6 +632,8 @@ M.setup = function(user_config)
   M.config = vim.tbl_deep_extend("force", M.default_config, user_config or {})
   if M.config.input_buffer_type == "dressing" then
     M.config.input_buffer_config = dressing_config
+  elseif M.config.input_buffer_type == "snacks" then
+    M.config.input_buffer_config = snacks_config
   end
 
   local group = api.nvim_create_augroup("inc-rename.nvim", { clear = true })
