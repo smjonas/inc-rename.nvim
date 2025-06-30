@@ -8,9 +8,11 @@ feedback thanks to Neovim's command preview feature.
 </div>
 
 ## Installation
+
 **This plugin requires at least Neovim 0.8**
 
 Install using your favorite package manager and call the `setup` function.
+
 <details>
     <summary>lazy.nvim</summary>
 
@@ -20,6 +22,7 @@ Install using your favorite package manager and call the `setup` function.
   opts = {}
 }
 ```
+
 </details>
 
 <details>
@@ -33,6 +36,7 @@ use {
   end,
 }
 ```
+
 </details>
 
 <details>
@@ -41,20 +45,27 @@ use {
 ```vim
 Plug 'smjonas/inc-rename.nvim'
 ```
+
 Somewhere in your init.lua, you will need to call the setup function:
+
 ```lua
 require("inc_rename").setup()
 ```
+
 </details>
 
 ## Usage
+
 Simply type `:IncRename <new_name>` while your cursor is on an LSP identifier.
 You could also create a keymap that types out the command name for you so you only have to
 enter the new name:
+
 ```lua
 vim.keymap.set("n", "<leader>rn", ":IncRename ")
 ```
+
 If you want to fill in the word under the cursor you can use the following:
+
 ```lua
 vim.keymap.set("n", "<leader>rn", function()
   return ":IncRename " .. vim.fn.expand("<cword>")
@@ -73,6 +84,7 @@ require("noice").setup {
 ```
 
 Then simply type the `:IncRename` command (or use the keymap mentioned above).
+
 <div align="center">
 <img src="https://user-images.githubusercontent.com/40792180/197182365-31657338-2b17-4996-86b4-002b4c2d837e.png">
 </div>
@@ -84,6 +96,7 @@ Then simply type the `:IncRename` command (or use the keymap mentioned above).
 
 </br>If you are using [dressing.nvim](https://github.com/stevearc/dressing.nvim),
 set the `input_buffer_type` option to `"dressing"`:
+
 ```lua
 require("inc_rename").setup {
   input_buffer_type = "dressing",
@@ -93,6 +106,7 @@ require("inc_rename").setup {
 Then simply type the `:IncRename` command and the new name you enter will automatically be updated in the input buffer as you type.
 
 The result should look something like this:
+
 <div align="center">
 <img src="https://user-images.githubusercontent.com/40792180/188309667-0d7e8086-ae48-4a25-8b01-df11d229b8c6.png">
 </div>
@@ -101,6 +115,7 @@ The result should look something like this:
 > 💡 Tip - Try these `dressing.nvim` settings to position the input box above the
 > cursor to not cover the word being renamed (thank you
 > [@RaafatTurki](https://github.com/RaafatTurki) for the suggestion!):
+
 ```lua
 require("dressing").setup {
   input = {
@@ -115,16 +130,41 @@ require("dressing").setup {
 
 </details>
 
+<details>
+<summary>&#127871; <code>snacks.nvim</code> support</summary>
+
+</br>If you are using [snacks.nvim](https://github.com/folke/snacks.nvim#-snacksnvim) and have enabled [`input`](https://github.com/folke/snacks.nvim/blob/main/docs/input.md), you can set the `input_buffer_type` option to `"snacks"`:
+
+```lua
+require("inc_rename").setup {
+  input_buffer_type = "snacks",
+}
+```
+
+Then simply type the `:IncRename` command and the new name you enter will automatically be updated in the input buffer as you type.
+
+The result should look something like this:
+
+<div align="center">
+</div>
+</br>
+
+</details>
+
 ## Known issues
+
 There have been reports of `inc-rename` not working with certain plugins and language servers:
+
 - `traces.vim` (see [issue #35](https://github.com/smjonas/inc-rename.nvim/issues/35))
 - `custom-elements-languageserver` (see [issue #44](https://github.com/smjonas/inc-rename.nvim/issues/44))
 
 Make sure to uninstall these if you are experiencing issues.
 
 ## Customization
+
 You can override the default settings by passing a Lua table to the `setup` function.
 The default options are:
+
 ```lua
 require("inc_rename").setup {
  -- the name of the command
@@ -153,6 +193,7 @@ require("inc_rename").setup {
 a buffer with information about all identifiers to be renamed will be shown as you type.
 
 Here is an example of how this could look like:
+
 <div align="center">
 <img src="https://github.com/smjonas/inc-rename.nvim/assets/40792180/36cf0324-09a1-4b3b-8561-ffe3626d52b1">
 </div>
