@@ -179,7 +179,7 @@ require("inc_rename").setup {
    -- whether to save the "IncRename" command in the commandline history (set to false to prevent issues with
    -- navigating to older entries that may arise due to the behavior of command preview)
   save_in_cmdline_history = true,
-   -- the type of the external input buffer to use (the only supported value is currently "dressing")
+   -- the type of the external input buffer to use (currently only support "dressing" or "snacks")
   input_buffer_type = nil,
    -- callback to run after renaming, receives the result table (from LSP handler) as an argument
   post_hook = nil,
