@@ -146,6 +146,7 @@ Then simply type the `:IncRename` command and the new name you enter will automa
 The result should look something like this:
 
 <div align="center">
+    <img width="1307" alt="Screenshot 2025-06-30 at 00 27 31" src="https://github.com/user-attachments/assets/cc2bb2c4-1230-4599-b07b-1daf03b52320" />
 </div>
 </br>
 
