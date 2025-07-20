@@ -55,9 +55,6 @@ local state = {
 
 local dressing_config = {
   filetype = "DressingInput",
-  close_window = function(_)
-    require("dressing.input").close()
-  end,
   initialize_input_buffer = function(default)
     state.win_id = api.nvim_get_current_win()
     vim.ui.input({ default = default }, function() end)
@@ -70,6 +67,9 @@ local dressing_config = {
         return
       end
     end
+  end,
+  close_window = function(_)
+    require("dressing.input").close()
   end,
 }
 
