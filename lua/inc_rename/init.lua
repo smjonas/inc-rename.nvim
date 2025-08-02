@@ -80,6 +80,7 @@ local snacks_config = {
     ---@type snacks.win|nil
     local snacks_win = vim.ui.input({ default = default }, function() end)
     if snacks_win then
+      snacks_win:set_title("Rename", "left")
       state.input_bufnr = snacks_win.buf
       state.input_win_id = snacks_win.win
     end
