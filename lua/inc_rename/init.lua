@@ -547,8 +547,10 @@ local function perform_lsp_rename(new_name)
       end
 
       if not result or vim.tbl_isempty(result) then
-        vim.notify("[inc-rename] Nothing renamed" .. err.message, vim.lsp.log_levels.WARN)
+        vim.notify("[inc-rename] Nothing renamed", vim.lsp.log_levels.WARN)
+        return
       end
+
       vim.lsp.util.apply_workspace_edit(result, client.offset_encoding)
 
       if M.config.show_message then
