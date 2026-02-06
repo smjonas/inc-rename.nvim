@@ -16,6 +16,10 @@ M.get_active_clients = function(bufnr, method)
     return clients
   end
   clients = vim.tbl_filter(function(client)
+    if vim.fn.has("nvim-0.11") == 1 then
+      return client:supports_method(method)
+    end
+    ---@diagnostic disable-next-line: deprecated
     return client.supports_method(method)
   end, clients)
   return clients
