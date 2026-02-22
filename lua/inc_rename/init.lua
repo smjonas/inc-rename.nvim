@@ -208,11 +208,11 @@ local function fetch_lsp_references(bufnr, lsp_params)
 
     -- Only call set_error and exit when all clients have been exhausted
     if client_response_counter == #clients then
-      if handle_references_result.err then
-        set_error(handle_references_result.err, vim.lsp.log_levels.WARN)
+      if type(handle_references_result) == "string" then
+        set_error(handle_references_result, vim.lsp.log_levels.WARN)
+        -- Leave command line mode when there is nothing to rename.
+        api.nvim_feedkeys(ctrl_c, "n", false)
       end
-      -- Leave command line mode when there is nothing to rename.
-      api.nvim_feedkeys(ctrl_c, "n", false)
       return
     end
   end)
