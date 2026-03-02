@@ -195,7 +195,7 @@ local function fetch_lsp_references(bufnr, lsp_params)
       return
     end
 
-    local ok, handle_references_result = utils.handle_references(clients, err, result, ctx)
+    local ok, handle_references_error = utils.handle_references(clients, err, result, ctx)
     if ok then
       handle_references_success = true
       state.cached_line_infos_per_bufnr = filter_duplicates(cache_lines(result))
@@ -208,8 +208,8 @@ local function fetch_lsp_references(bufnr, lsp_params)
 
     -- Only call set_error and exit when all clients have been exhausted
     if client_response_counter == #clients then
-      if handle_references_result.err then
-        set_error(handle_references_result.err, vim.lsp.log_levels.WARN)
+      if handle_references_error ~= nil then
+        set_error(handle_references_error, vim.lsp.log_levels.WARN)
       end
       -- Leave command line mode when there is nothing to rename.
       api.nvim_feedkeys(ctrl_c, "n", false)
