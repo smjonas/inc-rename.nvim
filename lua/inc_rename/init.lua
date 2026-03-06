@@ -189,7 +189,6 @@ local function fetch_lsp_references(bufnr, lsp_params)
   local client_response_counter = 0
   local handle_references_success = false
   vim.lsp.buf_request(bufnr, "textDocument/references", params, function(err, result, ctx, config)
-    client_response_counter = client_response_counter + 1
     if handle_references_success then
       -- A request has already succeeded, ignore other results.
       return
@@ -204,6 +203,12 @@ local function fetch_lsp_references(bufnr, lsp_params)
         api.nvim_feedkeys("a" .. backspace, "n", false)
       end
       return
+    end
+
+    -- Only count responses from clients in our filtered list;
+    -- handle_references returns nil as the second value for unrecognized clients
+    if handle_references_result ~= nil then
+      client_response_counter = client_response_counter + 1
     end
 
     -- Only call set_error and exit when all clients have been exhausted
