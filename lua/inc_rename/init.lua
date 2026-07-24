@@ -496,7 +496,7 @@ local function incremental_rename_preview(opts, preview_ns, preview_buf)
           line_infos,
           preview_fn_args
         )
-      else
+      elseif vim.bo[bufnr].modifiable then
         M._apply_highlights_fn(bufnr, line_nr, line_infos, preview_fn_args)
       end
     end
